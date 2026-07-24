@@ -193,19 +193,17 @@ fi
 echo "$RECIPE_INFO" | $PYTHON -c "
 import sys,json,os
 info = json.loads(sys.stdin.read())
-for i, s in enumerate(info.get('scenarios',[])):
-    serve = s.get('serve_cmd','')
-    verify = '\n'.join(s.get('verify_cmds',[]))
-    # Write to temp files
-    with open(f'/tmp/scenario_{i}_serve.sh', 'w') as f:
-        f.write(serve)
-    with open(f'/tmp/scenario_{i}_verify.sh', 'w') as f:
-        f.write(verify)
-    # Print metadata line
-    print(f'{i}|{s[\"npu\"]}|{s[\"precision\"]}|{s[\"deployment\"]}|{s[\"case\"]}')
-print('__END__')
-" | while IFS='|' read -r idx npu precision deployment case_name; do
-  [ "$idx" = "__END__" ] && break
+with open('/tmp/scenario_list.txt', 'w') as flist:
+    for i, s in enumerate(info.get('scenarios',[])):
+        serve = s.get('serve_cmd','')
+        verify = '\n'.join(s.get('verify_cmds',[]))
+        with open(f'/tmp/scenario_{i}_serve.sh', 'w') as f:
+            f.write(serve)
+        with open(f'/tmp/scenario_{i}_verify.sh', 'w') as f:
+            f.write(verify)
+        flist.write(f'{i}|{s[\"npu\"]}|{s[\"precision\"]}|{s[\"deployment\"]}|{s[\"case\"]}\n')
+"
+while IFS='|' read -r idx npu precision deployment case_name; do
   [ -z "$idx" ] && continue
 
   if [[ "${CI_RUNNER_SMOKE:-0}" == "1" ]] && [[ "$idx" != "0" ]]; then
@@ -355,7 +353,7 @@ SCRIPT_HEREDOC
   else
     log_info "PASSED: $MODEL_ID scenario [$idx]"
   fi
-done
+done < /tmp/scenario_list.txt
 
 if [[ "$SKIPPED" -gt 0 ]]; then
   exit 2
