@@ -300,6 +300,46 @@ SCRIPT_HEREDOC
     fi
   fi
 
+  # Run simple benchmark (aisbench-style)
+  log_info "  Running benchmark (50 requests, 10 warmup)..."
+  BENCH_RESULT=""
+  BENCH_TOTAL=0
+  BENCH_COUNT=0
+  SERVED_NAME=$(echo "$SERVE_CMD" | grep -oP 'served-model-name\s+\K\S+' | head -1 || echo "$MODEL_ID")
+
+  # Warmup
+  for w in $(seq 1 10); do
+    curl -sf -X POST http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{"model":"'"${SERVED_NAME}"'","messages":[{"role":"user","content":"Hi"}],"max_tokens":10}' \
+      > /dev/null 2>&1 || true
+  done
+
+  # Benchmark
+  for b in $(seq 1 50); do
+    START_TIME=$(date +%s%N)
+    RESP=$(curl -sf -X POST http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{"model":"'"${SERVED_NAME}"'","messages":[{"role":"user","content":"Hi"}],"max_tokens":10}' \
+      2>&1 || echo "FAIL")
+    END_TIME=$(date +%s%N)
+    ELAPSED_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+    if echo "$RESP" | grep -qi '"choices"'; then
+      BENCH_TOTAL=$((BENCH_TOTAL + ELAPSED_MS))
+      BENCH_COUNT=$((BENCH_COUNT + 1))
+    fi
+  done
+
+  if [[ "$BENCH_COUNT" -gt 0 ]]; then
+    BENCH_AVG=$((BENCH_TOTAL / BENCH_COUNT))
+    BENCH_RESULT="avg_latency_ms=${BENCH_AVG} success_rate=${BENCH_COUNT}/50"
+    log_info "  Benchmark: $BENCH_RESULT"
+    echo "$BENCH_RESULT" > "/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
+  else
+    log_warn "  Benchmark: all requests failed"
+    echo "benchmark_failed" > "/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
+  fi
+
   # Kill the server and all children
   log_info "  Stopping vllm serve..."
   if [[ -n "$SERVE_PID" ]] && kill -0 $SERVE_PID 2>/dev/null; then
