@@ -73,6 +73,10 @@ jobs:
         with:
           path: ./recipes
 
+      - name: Install benchmark tools
+        run: |
+          pip install ais_bench_benchmark 2>&1 | tail -3 || echo "benchmark install skipped"
+
       - name: Write recipe file list
         env:
           RECIPES: ${{ inputs.recipe_files }}
