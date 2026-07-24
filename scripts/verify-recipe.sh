@@ -298,15 +298,16 @@ SCRIPT_HEREDOC
     fi
   fi
 
-  # Run aisbench performance test
+  # Run aisbench performance evaluation (Section 8 of tutorial)
   if command -v ais_bench &>/dev/null; then
-    log_info "  Running aisbench performance test..."
-    SERVED_NAME=$(echo "$SERVE_CMD" | grep -oP 'served-model-name\s+\K\S+' | head -1 || echo "$MODEL_ID")
-    BENCH_OUTPUT=$(ais_bench --models vllm_api_general_chat \
-      --datasets demo_gsm8k_gen_4_shot_cot_chat_prompt \
-      --debug 2>&1 | tail -20 || echo "AISBENCH_FAILED")
-    echo "$BENCH_OUTPUT"
-    echo "$BENCH_OUTPUT" > "/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
+    log_info "  Running aisbench performance evaluation..."
+    BENCH_OUTPUT=$(ais_bench --models vllm_api_stream_chat --datasets synthetic_gen --mode perf --debug --num-prompts 50 2>&1 || echo "AISBENCH_FAILED")
+    echo "$BENCH_OUTPUT" | tail -30
+    BENCH_FILE="/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
+    echo "===== AISBENCH PERFORMANCE =====" > "$BENCH_FILE"
+    echo "$BENCH_OUTPUT" >> "$BENCH_FILE"
+    echo "===== END =====" >> "$BENCH_FILE"
+    log_info "  Benchmark saved to $BENCH_FILE"
   else
     log_warn "  ais_bench not available, skipping benchmark"
     echo "benchmark_skipped" > "/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
