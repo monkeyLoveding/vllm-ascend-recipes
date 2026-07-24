@@ -300,10 +300,14 @@ SCRIPT_HEREDOC
     fi
   fi
 
-  # Kill the server
+  # Kill the server and all children
   log_info "  Stopping vllm serve..."
-  kill $SERVE_PID 2>/dev/null || true
-  wait $SERVE_PID 2>/dev/null || true
+  if [[ -n "$SERVE_PID" ]] && kill -0 $SERVE_PID 2>/dev/null; then
+    kill -TERM -- -$SERVE_PID 2>/dev/null || kill $SERVE_PID 2>/dev/null || true
+    sleep 2
+    kill -KILL -- -$SERVE_PID 2>/dev/null || kill -9 $SERVE_PID 2>/dev/null || true
+    wait $SERVE_PID 2>/dev/null || true
+  fi
   log_info "  Server stopped."
 
   if [[ "$STATUS" -ne 0 ]]; then
