@@ -301,7 +301,22 @@ SCRIPT_HEREDOC
   # Run aisbench performance evaluation (Section 8 of tutorial)
   if command -v ais_bench &>/dev/null; then
     log_info "  Running aisbench performance evaluation..."
-    BENCH_OUTPUT=$(ais_bench --models vllm_api_stream_chat --datasets synthetic_gen --mode perf --debug --num-prompts 50 2>&1 || echo "AISBENCH_FAILED")
+    # Create local model config with correct path
+    AIS_CONFIG_DIR="/tmp/ais_config"
+    mkdir -p "$AIS_CONFIG_DIR/models"
+    cat > "$AIS_CONFIG_DIR/models/vllm_api_stream_chat.py" <<'PYEOF'
+from ais_bench.benchmark.models import VLLMCustomAPIChat
+from ais_bench.benchmark.utils.postprocess.model_postprocessors import extract_non_reasoning_content
+models = [dict(
+    attr="service", type=VLLMCustomAPIChat, abbr='vllm-api-stream-chat',
+    path="/root/.cache/modelscope/hub/models/Eco-Tech/Qwen3-30B-A3B-w8a8",
+    model="qwen3", stream=True, request_rate=0, retry=2,
+    host_ip="localhost", host_port=8000, max_out_len=1500, batch_size=32,
+    trust_remote_code=True, generation_kwargs=dict(temperature=0.01, ignore_eos=True),
+    pred_postprocessor=dict(type=extract_non_reasoning_content),
+)]
+PYEOF
+    BENCH_OUTPUT=$(PYTHONPATH="$AIS_CONFIG_DIR:$PYTHONPATH" ais_bench --models vllm_api_stream_chat --datasets synthetic_gen --mode perf --debug --num-prompts 50 2>&1 || echo "AISBENCH_FAILED")
     echo "$BENCH_OUTPUT" | tail -30
     BENCH_FILE="/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
     echo "===== AISBENCH PERFORMANCE =====" > "$BENCH_FILE"
