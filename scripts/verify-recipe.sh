@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# verify-recipe.sh ï¿½?Run a recipe's vllm serve commands and verify the service.
+# verify-recipe.sh ï¿?Run a recipe's vllm serve commands and verify the service.
 #
 # Usage:
 #   ./scripts/verify-recipe.sh models/en/Qwen/Qwen3-30B-A3B.yaml
 #
 # Exit codes:
-#   0 ï¿½?all scenarios verified successfully
-#   1 ï¿½?one or more scenario failed
-#   2 ï¿½?recipe skipped (no compatible hardware / unsupported)
+#   0 ï¿?all scenarios verified successfully
+#   1 ï¿?one or more scenario failed
+#   2 ï¿?recipe skipped (no compatible hardware / unsupported)
 set -euo pipefail
 
 RECIPE="$1"
@@ -22,6 +22,44 @@ RESET='\033[0m'
 log_info()  { echo -e "${GREEN}[INFO]${RESET}  $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${RESET} $*"; }
+
+# ============================================================
+# Port management helpers
+# ============================================================
+
+# Wait for port to be released (check every second, timeout in seconds)
+wait_for_port_free() {
+  local port="${1:-8000}"
+  local timeout="${2:-30}"
+  local waited=0
+  while [[ $waited -lt $timeout ]]; do
+    if ! ss -tlnp 2>/dev/null | grep -q ":${port} " && \
+       ! netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  log_warn "Port $port still in use after ${timeout}s"
+  return 1
+}
+
+# Force cleanup any process holding the given port
+force_free_port() {
+  local port="${1:-8000}"
+  local pid
+  pid=$(ss -tlnp 2>/dev/null | grep ":${port} " | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | head -1)
+  if [[ -z "$pid" ]]; then
+    pid=$(netstat -tlnp 2>/dev/null | grep ":${port} " | awk '{print $NF}' | sed 's|/.*||' | head -1)
+  fi
+  if [[ -n "$pid" ]] && [[ "$pid" != "-" ]]; then
+    log_warn "Force killing PID $pid holding port $port"
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 2
+    kill -KILL "$pid" 2>/dev/null || true
+    wait_for_port_free "$port" 10
+  fi
+}
 
 if [[ ! -f "$RECIPE" ]]; then
   log_error "Recipe file not found: $RECIPE"
@@ -240,6 +278,9 @@ SCRIPT_HEREDOC
   cat "/tmp/scenario_${idx}_serve.sh" >> "$VLLM_SCRIPT"
   chmod +x "$VLLM_SCRIPT"
 
+  # Ensure port 8000 is free before starting (cleanup stale processes)
+  force_free_port 8000
+
   log_info "  Starting vllm serve..."
   bash "$VLLM_SCRIPT" &
   SERVE_PID=$!
@@ -309,12 +350,14 @@ SCRIPT_HEREDOC
     fi
     BENCH_OUTPUT=$(ais_bench --models vllm_api_stream_chat --datasets synthetic_gen --mode perf --debug --num-prompts 50 2>&1 || echo "AISBENCH_FAILED")
     echo "$BENCH_OUTPUT" | tail -30
+    mkdir -p /tmp/verify-results
     BENCH_FILE="/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
     echo "===== AISBENCH PERFORMANCE =====" > "$BENCH_FILE"
     echo "$BENCH_OUTPUT" >> "$BENCH_FILE"
     echo "===== END =====" >> "$BENCH_FILE"
     log_info "  Benchmark saved to $BENCH_FILE"
   else
+    mkdir -p /tmp/verify-results
     log_warn "  ais_bench not available, skipping benchmark"
     echo "benchmark_skipped" > "/tmp/verify-results/$(basename "$RECIPE" .yaml).bench"
   fi
@@ -327,6 +370,11 @@ SCRIPT_HEREDOC
     kill -KILL -- -$SERVE_PID 2>/dev/null || kill -9 $SERVE_PID 2>/dev/null || true
     wait $SERVE_PID 2>/dev/null || true
   fi
+  # Wait for port to actually be released before next scenario
+  wait_for_port_free 8000 15 || {
+    log_warn "  Port 8000 may still be in use, forcing cleanup"
+    force_free_port 8000
+  }
   log_info "  Server stopped."
 
   if [[ "$STATUS" -ne 0 ]]; then
