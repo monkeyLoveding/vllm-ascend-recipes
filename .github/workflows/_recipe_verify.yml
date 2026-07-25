@@ -75,7 +75,9 @@ jobs:
 
       - name: Install benchmark tools
         run: |
-          pip install ais_bench_benchmark 2>&1 | tail -3 || echo "benchmark install skipped"
+          pip config set global.index-url http://cache-service.nginx-pypi-cache.svc.cluster.local/pypi/simple
+          pip config set global.trusted-host cache-service.nginx-pypi-cache.svc.cluster.local
+          pip install ais_bench_benchmark 2>&1 | tail -5 || echo "benchmark install skipped"
 
       - name: Write recipe file list
         env:
