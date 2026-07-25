@@ -138,8 +138,8 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Upload verification results to OBS
-        if: ${{ always() }}
+      - name: Upload verification results to OBS (Nightly only)
+        if: ${{ always() && inputs.trigger_type == 'nightly' }}
         continue-on-error: true
         uses: ascend-gha-runners/artifact/upload@v0.3
         with:
