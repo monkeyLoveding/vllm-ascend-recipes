@@ -24,4 +24,6 @@ pnpm-debug.log*
 .idea/
 
 .vscode/
-.codegraph/
+.codegraph/# Dev-only mock CI status fixtures; produced by publish-status.yml in prod
+public/status/
+public/runs/
