@@ -48,24 +48,33 @@ export interface StatusIndex {
 
 // Status files are served at the GitHub Pages origin in production. We
 // hard-code the site origin (matches astro.config.mjs `site:`) so the badge
-// works from any page. In dev mode we use a relative URL so the same code
-// resolves against `localhost:4321` and picks up the mock fixtures under
-// `public/status/` for an instant visual preview.
+// works from any page. In dev mode we use a relative URL prefixed with the
+// configured BASE_URL (matches astro.config.mjs `base:`) so it resolves
+// against `localhost:4321/<BASE_URL>/status/<slug>.json` and picks up the
+// mock fixtures under `public/status/` for an instant visual preview.
 export const STATUS_ORIGIN =
   'https://vllm-ascend.github.io/vllm-ascend-recipes';
 
-const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV;
+const env =
+  typeof import.meta !== 'undefined'
+    ? ((import.meta as any).env ?? {})
+    : ({} as Record<string, string>);
+const isDev = !!env.DEV;
+const baseUrl = (env.BASE_URL as string | undefined) ?? '/';
+
+function prefixForDev(): string {
+  if (!isDev) return '';
+  // baseUrl ends with a slash already (e.g. "/vllm-ascend-recipes/");
+  // we want the URL to start with "/<base>" without a double slash.
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
 
 export function statusUrlForSlug(slug: string): string {
-  return isDev
-    ? `/status/${slug}.json`
-    : `${STATUS_ORIGIN}/status/${slug}.json`;
+  return `${prefixForDev()}/status/${slug}.json`;
 }
 
 export function statusIndexUrl(): string {
-  return isDev
-    ? `/status/index.json`
-    : `${STATUS_ORIGIN}/status/index.json`;
+  return `${prefixForDev()}/status/index.json`;
 }
 
 export function durationHuman(start: string, end: string): string {
