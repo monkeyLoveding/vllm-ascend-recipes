@@ -142,7 +142,11 @@ jobs:
           if ! command -v kubectl >/dev/null 2>&1; then
             # Not on the runner PATH — check common install locations.
             for p in /usr/bin/kubectl /usr/local/bin/kubectl /opt/kubectl/kubectl; do
-              [ -x "$p" ] && export PATH="$(dirname "$p"):$PATH" && break
+              if [ -x "$p" ]; then
+                kube_dir="$(dirname "$p")"
+                export PATH="$kube_dir:$PATH"
+                break
+              fi
             done
           fi
           if ! command -v kubectl >/dev/null 2>&1; then
