@@ -182,9 +182,7 @@ jobs:
       needs.validate.result == 'success'
     uses: ./.github/workflows/_recipe_verify.yml
     with:
-      # a2b4-8 的 GitHub artifact 上传会 stall（Upload progress stalled）；
-      # a2b4-0 上传正常（multinode-verify 已验证）。
-      runner: linux-aarch64-a2b4-0
+      runner: linux-aarch64-a2b4-8
       recipe_files: ${{ needs.detect.outputs.recipe_files }}
       trigger_type: pr
       head_sha: ${{ github.event.pull_request.head.sha }}

@@ -389,8 +389,40 @@ def render_configmap(plan: dict, node_entry_src: str, args) -> dict:
 # kubectl wrappers
 # ---------------------------------------------------------------------------
 
+def kubectl_binary() -> str:
+    """Locate kubectl even if it's not on the Actions runner's PATH. Falls back
+    to bare ``kubectl`` so the shell produces a clear error if truly absent."""
+    import shutil
+    exe = shutil.which("kubectl")
+    if exe:
+        return exe
+    for p in ("/usr/bin/kubectl", "/usr/local/bin/kubectl",
+              "/opt/kubectl/kubectl", "/snap/bin/kubectl"):
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return "kubectl"
+
+
+def ensure_kubeconfig() -> str:
+    """a2b4-0 is the K8s scheduling node, so kubectl + a kubeconfig exist — but
+    the Actions runner process may not inherit them (PATH / KUBECONFIG / HOME).
+    Look in the common locations and export one so the controller can drive the
+    cluster."""
+    if os.environ.get("KUBECONFIG") and os.path.isfile(os.environ["KUBECONFIG"]):
+        return os.environ["KUBECONFIG"]
+    for p in (os.path.expanduser("~/.kube/config"),
+              "/root/.kube/config",
+              "/etc/kubernetes/admin.conf",
+              os.path.expanduser("$HOME/.kube/config")):
+        if os.path.isfile(p):
+            os.environ["KUBECONFIG"] = p
+            return p
+    return os.environ.get("KUBECONFIG", "")
+
+
 def kubectl(args_str: str, args, check: bool = True, stage: str = "run") -> int:
-    cmd = f"kubectl {args_str} -n {args.namespace}"
+    ensure_kubeconfig()
+    cmd = f"{kubectl_binary()} {args_str} -n {args.namespace}"
     print(f"[controller] $ {cmd}", flush=True)
     rc = subprocess.run(cmd, shell=True).returncode
     if check and rc != 0:
@@ -399,7 +431,8 @@ def kubectl(args_str: str, args, check: bool = True, stage: str = "run") -> int:
 
 
 def kubectl_capture(args_str: str, args) -> str | None:
-    cmd = f"kubectl {args_str} -n {args.namespace}"
+    ensure_kubeconfig()
+    cmd = f"{kubectl_binary()} {args_str} -n {args.namespace}"
     rc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if rc.returncode != 0:
         print(f"[controller] kubectl {args_str} failed: {rc.stderr}", file=sys.stderr)
