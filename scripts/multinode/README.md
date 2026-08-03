@@ -38,14 +38,15 @@ workflow_dispatch(recipe, hw_filter, deployment_filter, prefill_nodes, decode_no
 
 ## 前置条件
 
-1. **集群**：runner `linux-aarch64-a2b4-0` 有 `kubectl` + kubeconfig（能建 LWS/Pod）。
-2. **LWS CRD**：`leaderworkerset.x-k8s.io/v1` 已安装
+1. **集群**：runner `linux-aarch64-a2b4-0` 有 `kubectl` + kubeconfig（能建 LWS/Pod）。**a2b4-0 是 K8s 调度节点**，多机流水线在它上面纯 kubectl 驱动；单机流水线在计算节点 `a2b4-8` 直接跑容器，两者完全分开。
+2. **Namespace 隔离**：多机 LWS pod 都进**专用 namespace `ci-recipe-multinode`**（controller 首次自动创建），与单机流水线零交叉、不会混 pod。
+3. **LWS CRD**：`leaderworkerset.x-k8s.io/v1` 已安装
    （`kubectl apply -f https://github.com/kubernetes-sigs/lws/releases/.../standard.yaml`）。
-3. **Device plugin**：节点可申请 `huawei.com/Ascend910B`；节点带 label
+4. **Device plugin**：节点可申请 `huawei.com/Ascend910B`；节点带 label
    `node.kubernetes.io/npu.chip.name=910B4`（nodeAffinity 按此调度，可在 workflow 里改 `--chip`）。
-4. **权重**：每个节点已预下载权重到 `/root/.cache/modelscope/hub/models/...`
+5. **权重**：每个节点已预下载权重到 `/root/.cache/modelscope/hub/models/...`
    （Pod 以 hostPath 挂载该目录；DeepSeek-V4-Flash 的 recipe 硬编码了完整路径）。
-5. **镜像**：`vllm-ascend:v0.23.0rc1`（与单机 runner 同一镜像）；**PD 场景需 Mooncake 运行时**，用 `vllm-ascend:v0.23.0rc1-mooncake`（见下节）。
+6. **镜像**：`vllm-ascend:v0.23.0rc1`（与单机 runner 同一镜像）；**PD 场景需 Mooncake 运行时**，用 `vllm-ascend:v0.23.0rc1-mooncake`（见下节）。
 
 ## Mooncake（PD 场景的硬依赖）
 

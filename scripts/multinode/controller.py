@@ -43,7 +43,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
 DEFAULT_IMAGE = "swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1"
-DEFAULT_NAMESPACE = "vllm-project"
+# Dedicated namespace for the multi-node pipeline — its LWS pods are isolated
+# here, never mixed with the single-node runner (a2b4-8 runs vllm directly, no
+# pods). The controller creates it on first use.
+DEFAULT_NAMESPACE = "ci-recipe-multinode"
 DEFAULT_CHIP = "910B4"
 NPU_RESOURCE = "huawei.com/Ascend910B"
 
@@ -447,6 +450,22 @@ def kubectl_capture(args_str: str, args) -> str | None:
     return rc.stdout
 
 
+def ensure_namespace(args) -> None:
+    """The multi-node pods live in their own namespace (ci-recipe-multinode) so
+    they never mix with the single-node pipeline. Create it if missing — the
+    scheduling node's kubeconfig normally has cluster-admin."""
+    ensure_kubeconfig()
+    exe = kubectl_binary()
+    rc = subprocess.run(f"{exe} get namespace {args.namespace}",
+                        shell=True, capture_output=True).returncode
+    if rc != 0:
+        print(f"[controller] creating namespace {args.namespace}", flush=True)
+        subprocess.run(f"{exe} create namespace {args.namespace}",
+                       shell=True, check=True)
+    else:
+        print(f"[controller] namespace {args.namespace} exists", flush=True)
+
+
 def pod_ips(selector: str, args) -> list[str]:
     out = kubectl_capture(f"get pods -l {selector} -o json", args)
     if not out:
@@ -617,6 +636,7 @@ def run_pipeline(plan: dict, args, stages: Stages, results_dir: Path) -> None:
         yaml.safe_dump(cm, sort_keys=False), encoding="utf-8")
     (results_dir / "lws.yaml").write_text(lws, encoding="utf-8")
 
+    ensure_namespace(args)
     kubectl(f"apply -f {results_dir / 'configmap.yaml'}", args, stage="apply")
     kubectl(f"apply -f {results_dir / 'lws.yaml'}", args, stage="apply")
     stages.ok("apply")
