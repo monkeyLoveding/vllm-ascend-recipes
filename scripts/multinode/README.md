@@ -8,9 +8,12 @@ Pod，验证 PD 服务可用。比 `/recipes-research/multinode/`（9 脚本 + 4
 
 | 文件 | 作用 |
 |---|---|
-| `.github/workflows/multinode-recipe-verify.yml` | 唯一入口：workflow_dispatch → controller → artifact |
-| `scripts/multinode/controller.py` | 控制器（runner 上跑，kubectl 驱动）：extract → apply → wait → verify → cleanup |
+| `.github/workflows/multinode-recipe-verify.yml` | 唯一入口：PR 触发 + workflow_dispatch → controller → artifact |
+| `scripts/multinode/controller.py` | 控制器（a2b4-0 调度节点，kubectl 驱动）：extract → render → apply → wait → verify → cleanup |
+| `scripts/multinode/lws.yaml.jinja2` | LWS 模板（对齐上游 `tests/e2e/nightly/multi_node`），pod spec 由 controller 注入 |
 | `scripts/multinode/node_entry.py` | 每个 LWS Pod 的入口：选角色 → 写脚本 → 填运行时变量 → 启动 |
+| `scripts/multinode/launch_online_dp.py` | vendored 上游 example（recipe 不内嵌时用） |
+| `scripts/multinode/mooncake/` | Mooncake 运行时一次性镜像构建 |
 
 ## 运行链路
 
