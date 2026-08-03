@@ -354,23 +354,30 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
     }
 
 
-def render_lws(plan: dict, args) -> dict:
+def _indent(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(prefix + line if line.strip() else line
+                     for line in text.splitlines())
+
+
+def render_lws(plan: dict, args) -> str:
+    """Render the LeaderWorkerSet from scripts/multinode/lws.yaml.jinja2 —
+    aligned with upstream _e2e_nightly_multi_node.yaml. Simple string
+    substitution (no jinja2 dependency on the controller runner)."""
     size = plan["topology"]["prefill"] + plan["topology"]["decode"]
-    return {
-        "apiVersion": "leaderworkerset.x-k8s.io/v1",
-        "kind": "LeaderWorkerSet",
-        "metadata": {"name": plan["lws_name"], "namespace": args.namespace},
-        "spec": {
-            "replicas": 1,
-            "leaderWorkerTemplate": {
-                "size": size,
-                "restartPolicy": "None",
-                "leaderTemplate": {"metadata": {"labels": {"role": "leader"}},
-                                   "spec": _pod_spec(plan, args, f"recipe-entry-{args.run_id}")},
-                "workerTemplate": {"spec": _pod_spec(plan, args, f"recipe-entry-{args.run_id}")},
-            },
-        },
+    entry_cm = f"recipe-entry-{args.run_id}"
+    pod_spec = yaml.safe_dump(_pod_spec(plan, args, entry_cm), sort_keys=False).rstrip()
+    tpl = (SCRIPT_DIR / "lws.yaml.jinja2").read_text(encoding="utf-8")
+    values = {
+        "LWS_NAME": plan["lws_name"],
+        "NAMESPACE": args.namespace,
+        "SIZE": str(size),
+        "LEADER_SPEC": _indent(pod_spec, 8),
+        "WORKER_SPEC": _indent(pod_spec, 8),
     }
+    for key, value in values.items():
+        tpl = tpl.replace("{{ " + key + " }}", value)
+    return tpl
 
 
 def render_configmap(plan: dict, node_entry_src: str, args) -> dict:
@@ -608,8 +615,7 @@ def run_pipeline(plan: dict, args, stages: Stages, results_dir: Path) -> None:
     lws = render_lws(plan, args)
     (results_dir / "configmap.yaml").write_text(
         yaml.safe_dump(cm, sort_keys=False), encoding="utf-8")
-    (results_dir / "lws.yaml").write_text(
-        yaml.safe_dump(lws, sort_keys=False), encoding="utf-8")
+    (results_dir / "lws.yaml").write_text(lws, encoding="utf-8")
 
     kubectl(f"apply -f {results_dir / 'configmap.yaml'}", args, stage="apply")
     kubectl(f"apply -f {results_dir / 'lws.yaml'}", args, stage="apply")
@@ -685,7 +691,7 @@ def main() -> int:
             yaml.safe_dump(render_configmap(plan, node_entry_src, args),
                            sort_keys=False), encoding="utf-8")
         (results_dir / "lws.yaml").write_text(
-            yaml.safe_dump(render_lws(plan, args), sort_keys=False), encoding="utf-8")
+            render_lws(plan, args), encoding="utf-8")
         print("[controller] DRY-RUN OK — plan + LWS + ConfigMap rendered; "
               "no kubectl invoked", flush=True)
         return 0
