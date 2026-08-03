@@ -130,6 +130,14 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_run == 'true'
     runs-on: linux-aarch64-a2b4-0
+    # Run the controller in upstream's CPU image (vllm-ascend:nightly-cpu),
+    # same as _e2e_nightly_multi_node.yaml: kubectl + python are baked in, and
+    # all steps share ONE container so /tmp persists (the bare ARC runner had
+    # neither kubectl nor persistent /tmp).
+    container:
+      image: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:nightly-cpu
+      env:
+        KUBECONFIG: /tmp/kubeconfig
     continue-on-error: true
     timeout-minutes: 420
     steps:
@@ -137,43 +145,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Decode kubeconfig
-        # Upstream pattern: kubeconfig is base64 in the KUBECONFIG_B64 secret
-        # (same as _e2e_nightly_multi_node.yaml).
+        # Upstream pattern: kubeconfig is base64 in the KUBECONFIG_B64 secret;
+        # KUBECONFIG env points at /tmp/kubeconfig (container env).
         run: |
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > /tmp/kubeconfig
-          chmod 600 /tmp/kubeconfig
-          echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
-
-      - name: Install kubectl
-        # The ARC runner image has no kubectl (a2b4-0's host tools aren't in the
-        # runner container) — install it on the fly. Try dl.k8s.io first, then a
-        # China mirror (the runner's egress is often restricted). Diagnosis is
-        # teed to the artifact because the runner's log upload is broken.
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/multinode-results
-          ARCH=$(uname -m | sed 's/aarch64/arm64/; s/x86_64/amd64/')
-          VER="${KUBECTL_VERSION:-v1.30.0}"
-          {
-            echo "arch=$ARCH ver=$VER"
-            curl -fsSL --connect-timeout 15 -o /tmp/kubectl \
-                "https://dl.k8s.io/release/${VER}/bin/linux/${ARCH}/kubectl" \
-              || curl -fsSL --connect-timeout 15 -o /tmp/kubectl \
-                "https://mirrors.aliyun.com/kubernetes/kubectl/${VER}/bin/linux/${ARCH}/kubectl"
-            echo "kubectl downloaded: $(ls -la /tmp/kubectl 2>/dev/null || echo FAILED)"
-          } 2>&1 | tee /tmp/multinode-results/install-kubectl.txt
-          chmod +x /tmp/kubectl
-          if ! command -v kubectl >/dev/null 2>&1; then
-            if ! install -m 0755 /tmp/kubectl /usr/local/bin/kubectl 2>/dev/null; then
-              if ! sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl 2>/dev/null; then
-                mkdir -p "$HOME/bin"
-                cp /tmp/kubectl "$HOME/bin/kubectl"
-                echo "$HOME/bin" >> "$GITHUB_PATH"
-              fi
-            fi
-          fi
-          command -v kubectl >/dev/null 2>&1 || { echo "::error::kubectl install failed"; exit 1; }
-          kubectl version --client | head -2
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "$KUBECONFIG"
+          chmod 600 "$KUBECONFIG"
 
       - name: Check kubectl and cluster
         # Write the diagnosis to the artifact (the runner's log upload is
