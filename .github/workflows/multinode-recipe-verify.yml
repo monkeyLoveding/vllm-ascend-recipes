@@ -1,0 +1,121 @@
+#
+# Copyright (c) 2026 Huawei Technologies Co., Ltd. All Rights Reserved.
+# This file is a part of the vllm-ascend-recipes project.
+#
+
+# Multi-node PD recipe verify — a single, intentionally lean workflow.
+#
+# Contrast with the single-node pipeline (nightly/pr + reusable + publish):
+# this workflow does everything itself on the controller runner
+# (`linux-aarch64-a2b4-0`, kubectl + kubeconfig to the cluster). Results are
+# uploaded as a GitHub artifact only — no badge / publish-status wiring.
+#
+# Driver: scripts/multinode/controller.py
+# Pod    : scripts/multinode/node_entry.py  (runs in every LWS pod)
+
+name: 'Multi-node Recipe Verify'
+
+on:
+  workflow_dispatch:
+    inputs:
+      recipe:
+        description: 'Recipe YAML with a multi-node PD scenario'
+        required: false
+        default: 'models/en/DeepSeek/DeepSeek-V4-Flash.yaml'
+      hw_filter:
+        description: 'NPU hardware filter (A2 or A3)'
+        required: false
+        default: 'A2'
+      deployment_filter:
+        description: >-
+          Scenario deployment type to select (case-insensitive substring; 'PD'
+          matches both 多节点-PD分离 and Multi-Node PD Separation).
+        required: false
+        default: 'PD'
+      prefill_nodes:
+        description: 'Number of prefill nodes (pods)'
+        required: false
+        default: '1'
+      decode_nodes:
+        description: 'Number of decode nodes (pods)'
+        required: false
+        default: '4'
+      npu_per_node:
+        description: 'Ascend910B cards requested per pod (default 8 = 1 pod/node)'
+        required: false
+        default: '8'
+      image:
+        description: >-
+          vllm-ascend image. PD scenarios need the Mooncake runtime baked in —
+          build once via scripts/multinode/mooncake/build.sh and point here at
+          the -mooncake tag (e.g. ...:v0.23.0rc1-mooncake).
+        required: false
+        default: 'swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1'
+      proxy_command:
+        description: >-
+          Optional Mooncake proxy launch command, runs on prefill node 0. May use
+          placeholders <NODE_0_IP>, <node0_ip>, <prefill_endpoints>, <decode_endpoints>.
+          Leave empty to verify the prefill endpoint directly.
+        required: false
+        default: ''
+      proxy_port:
+        description: 'Proxy HTTP port (used when proxy_command is set)'
+        required: false
+        default: '8088'
+      run_eval:
+        description: 'Run a lightweight latency check after verify'
+        required: false
+        default: 'false'
+  # schedule:
+  #   - cron: '30 18 * * *'   # 18:30 UTC — avoids the single-node nightly at 18:00
+
+concurrency:
+  group: multinode-recipe-verify
+  cancel-in-progress: false
+
+jobs:
+  multinode-verify:
+    runs-on: linux-aarch64-a2b4-0
+    timeout-minutes: 420
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check kubectl and cluster
+        run: |
+          kubectl version --client
+          kubectl get nodes -o wide | head -5
+
+      - name: Install PyYAML
+        run: |
+          python3 -m pip install pyyaml --quiet 2>/dev/null || pip install pyyaml --quiet || true
+
+      - name: Run multi-node controller
+        id: controller
+        env:
+          PROXY_COMMAND: ${{ inputs.proxy_command }}
+          RUN_ID: r${{ github.run_id }}
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/multinode-results
+          python3 scripts/multinode/controller.py \
+            --recipe "${{ inputs.recipe }}" \
+            --hw-filter "${{ inputs.hw_filter }}" \
+            --deployment-filter "${{ inputs.deployment_filter }}" \
+            --prefill-nodes "${{ inputs.prefill_nodes }}" \
+            --decode-nodes "${{ inputs.decode_nodes }}" \
+            --npu-per-node "${{ inputs.npu_per_node }}" \
+            --image "${{ inputs.image }}" \
+            --run-id "$RUN_ID" \
+            --proxy-port "${{ inputs.proxy_port }}" \
+            --results-dir /tmp/multinode-results \
+            ${{ inputs.run_eval == 'true' && '--run-eval' || '' }}
+
+      - name: Upload multi-node results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multinode-results-${{ github.run_id }}
+          path: /tmp/multinode-results/
+          retention-days: 14
+          if-no-files-found: warn
