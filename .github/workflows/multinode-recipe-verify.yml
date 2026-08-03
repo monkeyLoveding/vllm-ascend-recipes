@@ -146,12 +146,22 @@ jobs:
 
       - name: Install kubectl
         # The ARC runner image has no kubectl (a2b4-0's host tools aren't in the
-        # runner container) — install it on the fly.
+        # runner container) — install it on the fly. Try dl.k8s.io first, then a
+        # China mirror (the runner's egress is often restricted). Diagnosis is
+        # teed to the artifact because the runner's log upload is broken.
         run: |
           set -euo pipefail
+          mkdir -p /tmp/multinode-results
           ARCH=$(uname -m | sed 's/aarch64/arm64/; s/x86_64/amd64/')
           VER="${KUBECTL_VERSION:-v1.30.0}"
-          curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/${VER}/bin/linux/${ARCH}/kubectl"
+          {
+            echo "arch=$ARCH ver=$VER"
+            curl -fsSL --connect-timeout 15 -o /tmp/kubectl \
+                "https://dl.k8s.io/release/${VER}/bin/linux/${ARCH}/kubectl" \
+              || curl -fsSL --connect-timeout 15 -o /tmp/kubectl \
+                "https://mirrors.aliyun.com/kubernetes/kubectl/${VER}/bin/linux/${ARCH}/kubectl"
+            echo "kubectl downloaded: $(ls -la /tmp/kubectl 2>/dev/null || echo FAILED)"
+          } 2>&1 | tee /tmp/multinode-results/install-kubectl.txt
           chmod +x /tmp/kubectl
           if ! command -v kubectl >/dev/null 2>&1; then
             if ! install -m 0755 /tmp/kubectl /usr/local/bin/kubectl 2>/dev/null; then
