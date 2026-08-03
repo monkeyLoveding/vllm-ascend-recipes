@@ -151,6 +151,43 @@ jobs:
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "$KUBECONFIG"
           chmod 600 "$KUBECONFIG"
 
+      - name: Install kubectl (yum/apt)
+        # The controller only needs the kubectl *client* (the cluster already
+        # exists — kubeadm/kubelet are for building/joining nodes, not needed).
+        # Install via the image's package manager; diagnostics tee to the
+        # artifact (the runner's log upload is broken).
+        run: |
+          set -u
+          mkdir -p /tmp/multinode-results
+          {
+            if command -v yum >/dev/null 2>&1; then
+              echo "package-manager=yum"
+              printf '%s\n' '[kubernetes]' 'name=Kubernetes' \
+                'baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/' \
+                'enabled=1' 'gpgcheck=0' > /etc/yum.repos.d/kubernetes.repo
+              yum install -y kubectl 2>&1 | tail -8
+            elif command -v dnf >/dev/null 2>&1; then
+              echo "package-manager=dnf"
+              printf '%s\n' '[kubernetes]' 'name=Kubernetes' \
+                'baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/' \
+                'enabled=1' 'gpgcheck=0' > /etc/yum.repos.d/kubernetes.repo
+              dnf install -y kubectl 2>&1 | tail -8
+            elif command -v apt-get >/dev/null 2>&1; then
+              echo "package-manager=apt"
+              apt-get update 2>&1 | tail -3
+              apt-get install -y kubectl 2>&1 | tail -8
+            else
+              echo "no known package manager"
+            fi
+            if command -v kubectl >/dev/null 2>&1; then
+              echo "kubectl OK at $(command -v kubectl)"
+              kubectl version --client 2>&1 | head -2
+            else
+              echo "kubectl install FAILED"
+            fi
+          } 2>&1 | tee /tmp/multinode-results/install-kubectl.txt
+          command -v kubectl >/dev/null 2>&1 || exit 1
+
       - name: Check kubectl and cluster
         # Write the diagnosis to the artifact (the runner's log upload is
         # broken, so the artifact is the only way to read step output).
