@@ -99,15 +99,30 @@ def own_ip_fallback() -> str:
         return "127.0.0.1"
 
 
-def default_nic() -> str:
+def resolve_nic(ip: str) -> str:
+    """Find the NIC that has ``ip`` assigned, via ``ip -o -4 addr`` (the recipe's
+    ``nic_name`` must match the NIC carrying the node's HCCL/IP — this is what a
+    user would look up with ``ip a``). Fall back to the default-route NIC, then
+    ``eth0``."""
+    try:
+        out = subprocess.check_output(["ip", "-o", "-4", "addr", "show"], text=True)
+        for line in out.splitlines():
+            parts = line.split()
+            # e.g. "2: enp67s0f0np0  inet 10.20.1.1/24 brd ... scope global ..."
+            if len(parts) >= 4 and parts[1] != "lo" and parts[3].startswith(ip + "/"):
+                return parts[1]
+    except Exception:
+        pass
     try:
         out = subprocess.check_output(
             ["sh", "-c", "ip -o -4 route show to default | awk '{print $5}' | head -n1"],
             text=True,
         ).strip()
-        return out or "eth0"
+        if out:
+            return out
     except Exception:
-        return "eth0"
+        pass
+    return "eth0"
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +250,7 @@ def main() -> int:
 
     peer_ips = resolve_peer_ips(lws, ns, size)
     own_ip = peer_ips[idx] if idx < len(peer_ips) else own_ip_fallback()
-    nic = default_nic()
+    nic = resolve_nic(own_ip)
     log(f"own_ip={own_ip} nic={nic} peers={peer_ips}")
 
     node_dir = os.path.join(WORKDIR, f"node-{idx}")

@@ -159,6 +159,7 @@ def parse_recipe(args) -> dict:
             "case": target.get("case", ""),
         },
         "topology": {"prefill": args.prefill_nodes, "decode": args.decode_nodes},
+        "npu_per_node": args.npu_per_node,
         "role_templates": {},
         "launch_cmds": {},
         "launch_online_dp_py": "",
@@ -216,7 +217,45 @@ def parse_recipe(args) -> dict:
     if missing_launch:
         raise PipelineError("extract", f"launch command missing for: {missing_launch}")
 
+    # Topology: an explicit input wins; 0 = auto-derive from the launch command
+    # (nodes = dp-size // dp-size-local, npu-per-node = dp-size-local × tp-size).
+    if plan["topology"]["prefill"] == 0 or plan["topology"]["decode"] == 0 \
+            or plan["npu_per_node"] == 0:
+        auto_topology, auto_npu = _parse_launch_topology(plan)
+        if plan["topology"]["prefill"] == 0:
+            plan["topology"]["prefill"] = auto_topology["prefill"]
+        if plan["topology"]["decode"] == 0:
+            plan["topology"]["decode"] = auto_topology["decode"]
+        if plan["npu_per_node"] == 0:
+            plan["npu_per_node"] = auto_npu
+
     return plan
+
+
+def _parse_launch_topology(plan: dict) -> tuple[dict, int]:
+    """Derive (prefill_nodes, decode_nodes, npu_per_node) from the launch
+    commands: nodes = dp-size // dp-size-local, npu-per-node = dp-size-local ×
+    tp-size. Raises if the commands can't be parsed."""
+    topology: dict[str, int] = {}
+    npu = 0
+    for role in ("prefill", "decode"):
+        raw = plan["launch_cmds"].get(role, "")
+        dp = re.search(r"--dp-size\s+(\d+)", raw)
+        dpl = re.search(r"--dp-size-local\s+(\d+)", raw)
+        tp = re.search(r"--tp-size\s+(\d+)", raw)
+        if not (dp and dpl and tp):
+            raise PipelineError(
+                "extract",
+                f"cannot auto-derive {role} topology from launch command "
+                f"(missing --dp-size/--dp-size-local/--tp-size): {raw[:120]}")
+        dp_size, dp_local, tp_size = int(dp.group(1)), int(dpl.group(1)), int(tp.group(1))
+        if dp_local <= 0 or dp_size % dp_local != 0:
+            raise PipelineError(
+                "extract",
+                f"{role}: dp-size {dp_size} not divisible by dp-size-local {dp_local}")
+        topology[role] = dp_size // dp_local
+        npu = max(npu, dp_local * tp_size)
+    return topology, npu
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +308,8 @@ def _volume_mounts(npu_per_node: int) -> list[dict]:
     return mounts
 
 
-def _pod_spec(args, entry_cm: str) -> dict:
+def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
+    npu = plan.get("npu_per_node") or args.npu_per_node
     return {
         "hostNetwork": True,
         "restartPolicy": "Never",
@@ -302,15 +342,15 @@ def _pod_spec(args, entry_cm: str) -> dict:
             ],
             "securityContext": {"privileged": True},
             "resources": {
-                "limits": {NPU_RESOURCE: args.npu_per_node,
+                "limits": {NPU_RESOURCE: npu,
                            "memory": "512Gi", "ephemeral-storage": "100Gi"},
-                "requests": {NPU_RESOURCE: args.npu_per_node,
+                "requests": {NPU_RESOURCE: npu,
                              "cpu": "125",
                              "memory": "512Gi", "ephemeral-storage": "100Gi"},
             },
-            "volumeMounts": _volume_mounts(args.npu_per_node),
+            "volumeMounts": _volume_mounts(npu),
         }],
-        "volumes": _volumes(args.npu_per_node, entry_cm),
+        "volumes": _volumes(npu, entry_cm),
     }
 
 
@@ -326,8 +366,8 @@ def render_lws(plan: dict, args) -> dict:
                 "size": size,
                 "restartPolicy": "None",
                 "leaderTemplate": {"metadata": {"labels": {"role": "leader"}},
-                                   "spec": _pod_spec(args, f"recipe-entry-{args.run_id}")},
-                "workerTemplate": {"spec": _pod_spec(args, f"recipe-entry-{args.run_id}")},
+                                   "spec": _pod_spec(plan, args, f"recipe-entry-{args.run_id}")},
+                "workerTemplate": {"spec": _pod_spec(plan, args, f"recipe-entry-{args.run_id}")},
             },
         },
     }
@@ -654,10 +694,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--deployment-filter", default="PD",
                    help="Scenario deployment type to select (case-insensitive "
                         "substring; 'PD' matches both languages)")
-    p.add_argument("--prefill-nodes", type=int, default=1)
-    p.add_argument("--decode-nodes", type=int, default=4)
-    p.add_argument("--npu-per-node", type=int, default=8,
-                   help="Ascend910B cards requested per pod (also forces 1 pod/node)")
+    p.add_argument("--prefill-nodes", type=int, default=0,
+                   help="Prefill node count (0 = auto-derive from recipe DP config)")
+    p.add_argument("--decode-nodes", type=int, default=0,
+                   help="Decode node count (0 = auto-derive from recipe DP config)")
+    p.add_argument("--npu-per-node", type=int, default=0,
+                   help="Ascend910B cards per pod (0 = auto-derive = "
+                        "dp-size-local × tp-size; also forces 1 pod/node)")
     p.add_argument("--image", default=DEFAULT_IMAGE)
     p.add_argument("--namespace", default=DEFAULT_NAMESPACE)
     p.add_argument("--chip", default=DEFAULT_CHIP,

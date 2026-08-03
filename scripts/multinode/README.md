@@ -88,15 +88,23 @@ Ascend 节点上构建时要验证一遍**（本仓库无法跑 docker build）�
 
 ## 拓扑怎么定
 
-拓扑是 workflow 输入（`prefill_nodes` / `decode_nodes`），**必须和 recipe 的 DP 配置匹配**，
-否则 DP rendezvous 会卡住：
+**默认自动推导**：controller 从 recipe 的 launch 命令算 `nodes = dp-size ÷ dp-size-local`、
+`npu-per-node = dp-size-local × tp-size`，不需要手动配。`prefill_nodes` / `decode_nodes` /
+`npu_per_node` 输入设 0 即自动（默认），非 0 才覆盖。
 
-| Recipe 场景 | 命令里的 DP 配置 | 最小合法拓扑 |
+| Recipe 场景 | 命令里的 DP 配置 | 自动推导出的拓扑 |
 |---|---|---|
 | DeepSeek-V4-Flash A2 PD | prefill `--dp-size 8 --dp-size-local 8`；decode `--dp-size 32 --dp-size-local 8` | 1P4D（decode 需 4×8=32 rank） |
 | DeepSeek-V4-Flash A3 PD（1P1D） | prefill `--dp-size 4 --tp 4`；decode `--dp-size 16 --tp 1` | 1P1D（A3 16 卡/节点） |
 | **Qwen3.5/3.6-27B A2 PD（推荐验证）** | prefill/decode `--dp-size 8 --tp-size 1 --dp-size-local 8` | **1P1D（A2 8 卡/节点，2 节点共 16 卡）** |
 | Qwen3.5/3.6-27B A3 PD | prefill/decode `--dp-size 8 --tp-size 2 --dp-size-local 8` | 1P1D（A3 16 卡/节点） |
+
+## PR 触发
+
+`pull_request` 触发（paths: `models/**`、`scripts/multinode/**`、本 workflow）：`prepare` job
+检测改动里**第一个含 PD 场景的 en recipe**，交给 controller 自动推导拓扑验证。多机验证
+`continue-on-error: true`——结果可见但不阻塞合入（依赖集群前置）。手动跑仍用
+`workflow_dispatch`。
 
 ## 运行时填值白名单（plan.md §九）
 

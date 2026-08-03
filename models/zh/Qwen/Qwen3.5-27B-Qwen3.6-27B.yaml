@@ -401,7 +401,7 @@ scenarios:
   - title: Prefill 节点 —— `run_dp_template.sh`
     content: |-
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # 例: "enp67s0f0np0" — 用 `ip a` 查绑定本机 IP 的网卡
       local_ip="141.xx.xx.1"
 
       export HCCL_IF_IP=$local_ip
@@ -454,7 +454,7 @@ scenarios:
       环境变量与 Prefill 节点相同，仅 `local_ip="141.xx.xx.2"`（decode 节点 IP）。vllm serve 命令不同：
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # 例: "enp67s0f0np0" — 用 `ip a` 查绑定本机 IP 的网卡
       local_ip="141.xx.xx.2"
 
       export HCCL_IF_IP=$local_ip
@@ -557,7 +557,7 @@ scenarios:
       Prefill 节点运行 `TP=1 + DP=8`（8 张 NPU，每个引擎一张卡）。模板从 `launch_online_dp.py` 接收 `$1..$7`。
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # 例: "enp67s0f0np0" — 用 `ip a` 查绑定本机 IP 的网卡
       local_ip="141.xx.xx.1"
 
       export HCCL_IF_IP=$local_ip
@@ -610,7 +610,7 @@ scenarios:
       Decode 节点运行 `TP=1 + DP=8`。
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # 例: "enp67s0f0np0" — 用 `ip a` 查绑定本机 IP 的网卡
       local_ip="141.xx.xx.2"
 
       export HCCL_IF_IP=$local_ip

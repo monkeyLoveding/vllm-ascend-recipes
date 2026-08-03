@@ -401,7 +401,7 @@ scenarios:
   - title: Prefill node — `run_dp_template.sh`
     content: |-
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # eg. "enp67s0f0np0" — find the NIC bound to the node IP via `ip a`
       local_ip="141.xx.xx.1"
 
       export HCCL_IF_IP=$local_ip
@@ -454,7 +454,7 @@ scenarios:
       Same shell setup as prefill node, but `local_ip="141.xx.xx.2"` (decode node IP). The vllm serve command differs:
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # eg. "enp67s0f0np0" — find the NIC bound to the node IP via `ip a`
       local_ip="141.xx.xx.2"
 
       export HCCL_IF_IP=$local_ip
@@ -557,7 +557,7 @@ scenarios:
       Prefill node runs `TP=1 + DP=8` (8 NPUs, one engine per NPU). The template receives `$1..$7` from `launch_online_dp.py`.
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # eg. "enp67s0f0np0" — find the NIC bound to the node IP via `ip a`
       local_ip="141.xx.xx.1"
 
       export HCCL_IF_IP=$local_ip
@@ -610,7 +610,7 @@ scenarios:
       Decode node runs `TP=1 + DP=8`.
 
       ```shell
-      nic_name="xxx"
+      nic_name="xxx" # eg. "enp67s0f0np0" — find the NIC bound to the node IP via `ip a`
       local_ip="141.xx.xx.2"
 
       export HCCL_IF_IP=$local_ip
