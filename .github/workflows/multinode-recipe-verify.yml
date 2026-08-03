@@ -138,10 +138,21 @@ jobs:
 
       - name: Check kubectl and cluster
         run: |
-          set -euo pipefail
+          set -u
+          # The runner's log upload is broken (BlobNotFound), so write the
+          # diagnosis to the results dir — the artifact upload works.
+          mkdir -p /tmp/multinode-results
+          DIAG=/tmp/multinode-results/kubectl-check.txt
+          {
+            echo "PATH=$PATH"
+            echo "HOME=$HOME"
+            command -v kubectl >/dev/null 2>&1 && echo "kubectl: on PATH -> $(command -v kubectl)" || echo "kubectl: NOT on PATH"
+            for p in /usr/bin/kubectl /usr/local/bin/kubectl /opt/kubectl/kubectl /snap/bin/kubectl; do
+              [ -x "$p" ] && echo "kubectl: found at $p"
+            done
+          } | tee "$DIAG"
           if ! command -v kubectl >/dev/null 2>&1; then
-            # Not on the runner PATH — check common install locations.
-            for p in /usr/bin/kubectl /usr/local/bin/kubectl /opt/kubectl/kubectl; do
+            for p in /usr/bin/kubectl /usr/local/bin/kubectl /opt/kubectl/kubectl /snap/bin/kubectl; do
               if [ -x "$p" ]; then
                 kube_dir="$(dirname "$p")"
                 export PATH="$kube_dir:$PATH"
@@ -150,7 +161,7 @@ jobs:
             done
           fi
           if ! command -v kubectl >/dev/null 2>&1; then
-            echo "::error::kubectl not found — a2b4-0 is the K8s scheduling node, kubectl should exist; add it to the runner PATH or symlink it"
+            echo "::error::kubectl not found on PATH nor in /usr/bin /usr/local/bin /opt/kubectl /snap/bin — see kubectl-check.txt artifact"
             exit 1
           fi
           # a2b4-0 has a kubeconfig on disk; the Actions runner just needs it
@@ -159,14 +170,16 @@ jobs:
           for f in "$HOME/.kube/config" /root/.kube/config /etc/kubernetes/admin.conf; do
             [ -f "$f" ] && export KUBECONFIG="$f" && break
           done
+          {
+            [ -n "$KUBECONFIG" ] && echo "KUBECONFIG=$KUBECONFIG" || echo "kubeconfig: NOT found in \$HOME/.kube/config /root/.kube/config /etc/kubernetes/admin.conf"
+            kubectl version --client 2>&1 | head -2
+            kubectl get nodes -o wide 2>&1 | head -8
+          } | tee -a "$DIAG"
           if [ -z "$KUBECONFIG" ]; then
-            echo "::error::no kubeconfig found in \$HOME/.kube/config, /root/.kube/config or /etc/kubernetes/admin.conf"
+            echo "::error::no kubeconfig found — see kubectl-check.txt artifact"
             exit 1
           fi
           echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
-          echo "Using KUBECONFIG=$KUBECONFIG"
-          kubectl version --client 2>&1 | head -2
-          kubectl get nodes -o wide 2>&1 | head -8
 
       - name: Install PyYAML
         run: |
