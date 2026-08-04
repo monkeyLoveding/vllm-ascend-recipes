@@ -146,9 +146,10 @@ jobs:
         # namespace (no cluster-scope node/namespace access). LWS pods run here.
         NAMESPACE: vllm-ascend-vllm-ascend-recipes
     continue-on-error: true
-    # The controller itself finishes well under this; the cap mostly bounds the
-    # worst case where the runner's container teardown hangs after the steps.
-    timeout-minutes: 90
+    # 1h diagnostic hold in the check step + controller (apply/wait/verify) —
+    # worst case needs ~110min; 180 keeps a margin and still bounds a teardown
+    # hang well under the old 420.
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,6 +220,15 @@ jobs:
         run: |
           set -u
           mkdir -p /tmp/multinode-results
+          # TEMPORARY DIAGNOSTIC HOLD: keep the job alive 1h so an admin can
+          # log into the cluster / runner pod and inspect state before the gate
+          # runs. Heartbeat prints every 60s so the step visibly stays alive.
+          echo "=== HOLD: sleeping 3600s before the gate (admin inspection window); heartbeat every 60s ==="
+          for s in $(seq 60 60 3600); do
+            echo "HOLD $s/3600s $(date -u +%H:%M:%SZ) — kubeconfig=$KUBECONFIG"
+            sleep 60
+          done
+          echo "=== HOLD complete — proceeding to gate ==="
           # GATE FIRST — the one real namespace-scoped operation the pipeline
           # depends on. Its command + output are printed at the TOP of the step
           # log so the failing command (and the exact Forbidden error) is the
