@@ -271,7 +271,15 @@ jobs:
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
           cat /tmp/multinode-results/kubectl-check.txt
           if [ "${GATE_OK:-0}" != "1" ]; then
-            echo "::error::FAILED COMMAND: kubectl --kubeconfig \$KUBECONFIG get pods -n $NAMESPACE — RBAC denies pods in this namespace; see kubectl-check.txt artifact"
+            echo "::error::FAILED COMMAND: kubectl --kubeconfig \$KUBECONFIG get pods -n $NAMESPACE — see kubectl-check.txt artifact"
+            # HOLD ON FAILURE: keep the container alive 3600s (heartbeat every
+            # 60s) so an admin can log in and diagnose (e.g. network to the API
+            # server), then fail.
+            echo "=== HOLD-ON-FAILURE: check failed; keeping the container alive 3600s (heartbeat every 60s) for on-box diagnosis ==="
+            for s in $(seq 60 60 3600); do
+              echo "HOLD $s/3600s $(date -u +%H:%M:%SZ)"
+              sleep 60
+            done
             exit 1
           fi
 
