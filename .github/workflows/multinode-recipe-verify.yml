@@ -272,7 +272,10 @@ jobs:
         uses: actions/upload-artifact@v4
         # The runner's artifact/log upload is flaky and can hang; cap it so a
         # hang shows up as a step failure instead of silently stalling the job.
-        timeout-minutes: 2
+        # 2min proved too tight on a degraded runner (upload hit the cap at
+        # exactly 120s while the healthy run needed only 6s); 5min still bounds
+        # a real hang while giving a slow-but-working upload room to finish.
+        timeout-minutes: 5
         with:
           name: multinode-results-${{ github.run_id }}
           path: /tmp/multinode-results/
