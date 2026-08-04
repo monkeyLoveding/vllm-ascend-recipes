@@ -592,19 +592,34 @@ def dump_logs(plan: dict, args, results_dir: Path) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
     total = plan["topology"]["prefill"] + plan["topology"]["decode"]
     lws = plan["lws_name"]
+    # Cluster-wide snapshot first: pod phases + recent events explain scheduling
+    # failures (Pending / ImagePullBackOff / CrashLoopBackOff) that pod logs
+    # alone cannot — mirrors upstream's `kubectl get pods` + `describe pod`
+    # diagnostics in _e2e_nightly_multi_node.yaml.
+    pods = kubectl_capture("get pods -o wide", args)
+    (logs_dir / "pods.txt").write_text(pods or "no pods", encoding="utf-8")
+    events = kubectl_capture("get events --sort-by=.lastTimestamp", args)
+    (logs_dir / "events.txt").write_text(events or "no events", encoding="utf-8")
+    print("[controller] dumped logs/pods.txt + logs/events.txt", flush=True)
     for i in range(total):
         name = f"{lws}-0" if i == 0 else f"{lws}-0-{i}"
         out = kubectl_capture(f"logs {name} --tail=200", args)
         (logs_dir / f"node-{i}.log").write_text(out or "no logs", encoding="utf-8")
-        print(f"[controller] dumped logs/node-{i}.log", flush=True)
+        desc = kubectl_capture(f"describe pod {name}", args)
+        (logs_dir / f"node-{i}.describe.txt").write_text(
+            desc or "no describe", encoding="utf-8")
+        print(f"[controller] dumped logs/node-{i}.log + node-{i}.describe.txt",
+              flush=True)
 
 
 def cleanup(plan: dict, args) -> bool:
     ok = True
     lws = plan["lws_name"]
     cm = f"recipe-entry-{plan['run_id']}"
+    ensure_kubeconfig()
+    exe = kubectl_binary()
     for res in (f"lws {lws}", f"configmap {cm}"):
-        rc = subprocess.run(["kubectl", "delete", *res.split(), "-n", args.namespace,
+        rc = subprocess.run([exe, "delete", *res.split(), "-n", args.namespace,
                              "--ignore-not-found"], capture_output=True, text=True)
         if rc.returncode != 0:
             ok = False

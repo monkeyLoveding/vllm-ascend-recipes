@@ -67,13 +67,34 @@ def resolve_ip(dns: str) -> str | None:
 
 
 def peer_dns_candidates(lws: str, ns: str, idx: int) -> list[str]:
-    """LWS pod naming: leader ``<lws>-0`` (headless svc ``<lws>-leader``),
-    workers ``<lws>-0-<k>`` (headless svc ``<lws>-worker``). Try a few names
-    defensively — the headless-service suffix varies across LWS versions."""
-    base = lws + "-0" if idx == 0 else f"{lws}-0-{idx}"
-    svcs = ["leader", "worker", ""]
-    return [f"{base}.{lws}-{svc}.{ns}.svc.cluster.local".replace("--", "-")
-            for svc in svcs]
+    """Build candidate DNS names for peer ``idx``.
+
+    Primary path (aligned with upstream tests/e2e/nightly/multi_node/utils.py):
+    parse the LWS-injected ``LWS_LEADER_ADDRESS`` env var — ``<leader>.<group>.
+    <ns>.<...>`` — and derive every worker name from it, so we never have to
+    guess the headless-service suffix. ``leader`` here is the leader pod name
+    (``<lws>-0``), so worker ``idx`` is ``<lws>-0-<idx>`` in the same group.
+
+    Fall back to the previous defensive name variants when the env var is
+    absent (bare pod templates that don't set it)."""
+    candidates: list[str] = []
+    leader_dns = os.environ.get("LWS_LEADER_ADDRESS", "")
+    if leader_dns:
+        parts = leader_dns.split(".")
+        if len(parts) >= 3:
+            leader_name, group_name, namespace = parts[0], parts[1], parts[2]
+            if idx == 0:
+                # The leader's own address — already correct (FQDN or short).
+                candidates = [leader_dns]
+            else:
+                base = f"{leader_name}-{idx}.{group_name}.{namespace}"
+                candidates = [base, f"{base}.svc.cluster.local"]
+    if not candidates:
+        base = lws + "-0" if idx == 0 else f"{lws}-0-{idx}"
+        svcs = ["leader", "worker", ""]
+        candidates = [f"{base}.{lws}-{svc}.{ns}.svc.cluster.local".replace("--", "-")
+                      for svc in svcs]
+    return candidates
 
 
 def resolve_peer_ips(lws: str, ns: str, size: int) -> list[str]:
