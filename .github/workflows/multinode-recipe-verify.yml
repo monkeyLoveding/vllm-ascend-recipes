@@ -138,6 +138,10 @@ jobs:
       image: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:nightly-cpu
       env:
         KUBECONFIG: /tmp/kubeconfig
+        # The controller's kubeconfig authenticates as the runner's own
+        # in-cluster ServiceAccount, which only has permissions inside this
+        # namespace (no cluster-scope node/namespace access). LWS pods run here.
+        NAMESPACE: vllm-ascend-vllm-ascend-recipes
     continue-on-error: true
     timeout-minutes: 420
     steps:
@@ -197,20 +201,25 @@ jobs:
       - name: Check kubectl and cluster
         # Write the diagnosis to the artifact (the runner's log upload is
         # broken, so the artifact is the only way to read step output). No
-        # `set -e` here — capture the full `kubectl get nodes` failure, then
-        # gate on it explicitly.
+        # `set -e` here — capture the full failure, then gate on it explicitly.
+        # The kubeconfig authenticates as the runner's own in-cluster
+        # ServiceAccount, which has permissions only inside NAMESPACE (no
+        # cluster-scope node/namespace access), so the check is namespace-scoped.
         run: |
           set -u
           mkdir -p /tmp/multinode-results
           {
             echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
+            echo "NAMESPACE=${NAMESPACE:-<unset>}"
             kubectl version --client 2>&1 | head -2
-            echo "--- kubectl get nodes ---"
-            kubectl get nodes -o wide 2>&1 | head -10
+            echo "--- kubectl auth can-i list pods (namespace-scoped) ---"
+            kubectl auth can-i list pods -n "$NAMESPACE" 2>&1
+            echo "--- kubectl get pods in $NAMESPACE ---"
+            kubectl get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
           cat /tmp/multinode-results/kubectl-check.txt
-          if ! kubectl get nodes >/dev/null 2>&1; then
-            echo "::error::kubectl get nodes failed — see kubectl-check.txt artifact"
+          if ! kubectl auth can-i list pods -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "::error::SA lacks pod permission in $NAMESPACE — see kubectl-check.txt artifact"
             exit 1
           fi
 
