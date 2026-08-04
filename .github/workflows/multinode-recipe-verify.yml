@@ -219,9 +219,22 @@ jobs:
         run: |
           set -u
           mkdir -p /tmp/multinode-results
+          # GATE FIRST — the one real namespace-scoped operation the pipeline
+          # depends on. Its command + output are printed at the TOP of the step
+          # log so the failing command (and the exact Forbidden error) is the
+          # first thing visible, not buried under the diagnostics below.
+          echo "=== GATE COMMAND: kubectl --kubeconfig \$KUBECONFIG get pods -n \"$NAMESPACE\" ==="
+          if kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE" -o wide 2>&1; then
+            echo "GATE RESULT: OK"
+            GATE_OK=1
+          else
+            echo "GATE RESULT: FAILED"
+            GATE_OK=0
+          fi
           {
             echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
             echo "NAMESPACE=${NAMESPACE:-<unset>}"
+            echo "GATE_RESULT=${GATE_OK} (1=ok 0=fail)"
             echo "--- kubeconfig file ---"
             ls -la "$KUBECONFIG" 2>&1
             echo "--- kubeconfig current-context / user / server ---"
@@ -233,12 +246,10 @@ jobs:
             kubectl --kubeconfig "$KUBECONFIG" auth whoami 2>&1
             echo "--- kubectl auth can-i --list (namespace-scoped) ---"
             kubectl --kubeconfig "$KUBECONFIG" auth can-i --list -n "$NAMESPACE" 2>&1 | head -20
-            echo "--- kubectl get pods in $NAMESPACE (namespace-scoped) ---"
-            kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
           cat /tmp/multinode-results/kubectl-check.txt
-          if ! kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE" >/dev/null 2>&1; then
-            echo "::error::kubectl get pods failed in $NAMESPACE — see kubectl-check.txt artifact"
+          if [ "${GATE_OK:-0}" != "1" ]; then
+            echo "::error::FAILED COMMAND: kubectl --kubeconfig \$KUBECONFIG get pods -n $NAMESPACE — RBAC denies pods in this namespace; see kubectl-check.txt artifact"
             exit 1
           fi
 
