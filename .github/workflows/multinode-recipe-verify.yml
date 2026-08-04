@@ -207,6 +207,9 @@ jobs:
         # Write the diagnosis to the artifact (the runner's log upload is
         # broken, so the artifact is the only way to read step output). No
         # `set -e` here — capture the full failure, then gate on it explicitly.
+        # Every command passes `--kubeconfig "$KUBECONFIG"` explicitly, matching
+        # the manual probe an admin would run (`kubectl get po -n ... --kubeconfig
+        # xxx.yaml`) so there is zero ambiguity about which config is loaded.
         # The gate is a real namespace-scoped operation (`get pods`) rather than
         # `auth can-i`: can-i can report "no" in some RBAC/aggregation setups
         # while the actual GET/LIST works — the real operation is what the
@@ -219,16 +222,22 @@ jobs:
           {
             echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
             echo "NAMESPACE=${NAMESPACE:-<unset>}"
+            echo "--- kubeconfig file ---"
+            ls -la "$KUBECONFIG" 2>&1
+            echo "--- kubeconfig current-context / user / server ---"
+            kubectl --kubeconfig "$KUBECONFIG" config view --minify \
+              -o jsonpath='ctx={.current-context} user={.users[0].name} server={.clusters[0].cluster.server}{"\n"}' 2>&1
+            echo "--- kubectl version --client ---"
             kubectl version --client 2>&1 | head -2
             echo "--- kubectl auth whoami (authenticated identity) ---"
-            kubectl auth whoami 2>&1 || kubectl config view --minify 2>&1
+            kubectl --kubeconfig "$KUBECONFIG" auth whoami 2>&1
             echo "--- kubectl auth can-i --list (namespace-scoped) ---"
-            kubectl auth can-i --list -n "$NAMESPACE" 2>&1 | head -20
+            kubectl --kubeconfig "$KUBECONFIG" auth can-i --list -n "$NAMESPACE" 2>&1 | head -20
             echo "--- kubectl get pods in $NAMESPACE (namespace-scoped) ---"
-            kubectl get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
+            kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
           cat /tmp/multinode-results/kubectl-check.txt
-          if ! kubectl get pods -n "$NAMESPACE" >/dev/null 2>&1; then
+          if ! kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE" >/dev/null 2>&1; then
             echo "::error::kubectl get pods failed in $NAMESPACE — see kubectl-check.txt artifact"
             exit 1
           fi
