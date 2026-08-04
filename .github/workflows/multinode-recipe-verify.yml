@@ -207,9 +207,12 @@ jobs:
         # Write the diagnosis to the artifact (the runner's log upload is
         # broken, so the artifact is the only way to read step output). No
         # `set -e` here — capture the full failure, then gate on it explicitly.
-        # The kubeconfig authenticates as the runner's own in-cluster
-        # ServiceAccount, which has permissions only inside NAMESPACE (no
-        # cluster-scope node/namespace access), so the check is namespace-scoped.
+        # The gate is a real namespace-scoped operation (`get pods`) rather than
+        # `auth can-i`: can-i can report "no" in some RBAC/aggregation setups
+        # while the actual GET/LIST works — the real operation is what the
+        # controller depends on. The kubeconfig authenticates as the runner's
+        # own in-cluster ServiceAccount, which has permissions only inside
+        # NAMESPACE (no cluster-scope node/namespace access).
         run: |
           set -u
           mkdir -p /tmp/multinode-results
@@ -217,14 +220,12 @@ jobs:
             echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
             echo "NAMESPACE=${NAMESPACE:-<unset>}"
             kubectl version --client 2>&1 | head -2
-            echo "--- kubectl auth can-i list pods (namespace-scoped) ---"
-            kubectl auth can-i list pods -n "$NAMESPACE" 2>&1
-            echo "--- kubectl get pods in $NAMESPACE ---"
+            echo "--- kubectl get pods in $NAMESPACE (namespace-scoped) ---"
             kubectl get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
           cat /tmp/multinode-results/kubectl-check.txt
-          if ! kubectl auth can-i list pods -n "$NAMESPACE" >/dev/null 2>&1; then
-            echo "::error::SA lacks pod permission in $NAMESPACE — see kubectl-check.txt artifact"
+          if ! kubectl get pods -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "::error::kubectl get pods failed in $NAMESPACE — see kubectl-check.txt artifact"
             exit 1
           fi
 
