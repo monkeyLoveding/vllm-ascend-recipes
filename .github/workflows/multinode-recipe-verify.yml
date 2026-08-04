@@ -251,6 +251,9 @@ jobs:
       - name: Upload multi-node results
         if: always()
         uses: actions/upload-artifact@v4
+        # The runner's artifact/log upload is flaky and can hang; cap it so a
+        # hang shows up as a step failure instead of silently stalling the job.
+        timeout-minutes: 2
         with:
           name: multinode-results-${{ github.run_id }}
           path: /tmp/multinode-results/
