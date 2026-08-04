@@ -235,8 +235,10 @@ jobs:
           if [ "${HOLD_MIN:-0}" -gt 0 ] 2>/dev/null; then
             HOLD_SEC=$((HOLD_MIN * 60))
             echo "=== HOLD: sleeping ${HOLD_MIN}min (${HOLD_SEC}s) before the gate; heartbeat every 60s ==="
-            for s in $(seq 60 60 "$HOLD_SEC"); do
-              echo "HOLD $s/${HOLD_SEC}s $(date -u +%H:%M:%SZ) — kubeconfig=$KUBECONFIG"
+            s=0
+            while [ "$s" -lt "$HOLD_SEC" ]; do
+              s=$((s + 60))
+              echo "HOLD ${s}/${HOLD_SEC}s $(date -u +%H:%M:%SZ) — kubeconfig=$KUBECONFIG"
               sleep 60
             done
             echo "=== HOLD complete — proceeding to gate ==="
@@ -276,8 +278,10 @@ jobs:
             # 60s) so an admin can log in and diagnose (e.g. network to the API
             # server), then fail.
             echo "=== HOLD-ON-FAILURE: check failed; keeping the container alive 3600s (heartbeat every 60s) for on-box diagnosis ==="
-            for s in $(seq 60 60 3600); do
-              echo "HOLD $s/3600s $(date -u +%H:%M:%SZ)"
+            s=0
+            while [ "$s" -lt 3600 ]; do
+              s=$((s + 60))
+              echo "HOLD ${s}/3600s $(date -u +%H:%M:%SZ)"
               sleep 60
             done
             exit 1
