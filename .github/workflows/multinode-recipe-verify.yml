@@ -225,7 +225,13 @@ jobs:
         # own in-cluster ServiceAccount, which has permissions only inside
         # NAMESPACE (no cluster-scope node/namespace access).
         run: |
+          # GitHub runs steps with `set -e` by default. The diagnostics below
+          # legitimately fail when the cluster/API server is unreachable — under
+          # errexit the FIRST failing kubectl would abort the step before the
+          # gate check / hold. Disable it here; failures are captured and gated
+          # explicitly via GATE_OK.
           set -u
+          set +e
           mkdir -p /tmp/multinode-results
           # Optional diagnostic hold (workflow_dispatch input hold_minutes):
           # keep the job alive N minutes so an admin can log in and inspect the
