@@ -220,6 +220,10 @@ jobs:
             echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
             echo "NAMESPACE=${NAMESPACE:-<unset>}"
             kubectl version --client 2>&1 | head -2
+            echo "--- kubectl auth whoami (authenticated identity) ---"
+            kubectl auth whoami 2>&1 || kubectl config view --minify 2>&1
+            echo "--- kubectl auth can-i --list (namespace-scoped) ---"
+            kubectl auth can-i --list -n "$NAMESPACE" 2>&1 | head -20
             echo "--- kubectl get pods in $NAMESPACE (namespace-scoped) ---"
             kubectl get pods -n "$NAMESPACE" -o wide 2>&1 | head -10
           } > /tmp/multinode-results/kubectl-check.txt 2>&1
