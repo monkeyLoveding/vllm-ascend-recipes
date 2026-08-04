@@ -87,6 +87,13 @@ concurrency:
   group: multinode-recipe-verify
   cancel-in-progress: false
 
+# This runner's log/artifact upload is broken (BlobNotFound), so failure
+# diagnostics go out as a PR comment via the GitHub API instead — that transport
+# still works. pull-requests: write is needed to post the comment.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -199,12 +206,15 @@ jobs:
           command -v kubectl >/dev/null 2>&1 || exit 1
 
       - name: Check kubectl and cluster
+        id: check
         # Write the diagnosis to the artifact (the runner's log upload is
         # broken, so the artifact is the only way to read step output). No
         # `set -e` here — capture the full failure, then gate on it explicitly.
         # The kubeconfig authenticates as the runner's own in-cluster
         # ServiceAccount, which has permissions only inside NAMESPACE (no
         # cluster-scope node/namespace access), so the check is namespace-scoped.
+        # On failure, the "Report check diagnosis" step posts this file to the
+        # PR as a comment (artifact upload is broken too).
         run: |
           set -u
           mkdir -p /tmp/multinode-results
@@ -222,6 +232,36 @@ jobs:
             echo "::error::SA lacks pod permission in $NAMESPACE — see kubectl-check.txt artifact"
             exit 1
           fi
+
+      - name: Report check diagnosis
+        # Log/artifact upload are broken on this runner, so surface the actual
+        # kubectl-check.txt content as a PR comment (via the GitHub API, which
+        # still works). Runs only when the check above failed; no-op for
+        # workflow_dispatch (no PR).
+        if: always() && steps.check.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR_NUMBER" ]; then
+            cat /tmp/multinode-results/kubectl-check.txt
+            exit 0
+          fi
+          BODY=$(python3 - <<'PY'
+          import json
+          with open('/tmp/multinode-results/kubectl-check.txt', encoding='utf-8') as f:
+              content = f.read()
+          body = "### ⛔ Multi-node check failed\n"
+          body += "_run " + "${{ github.run_id }}" + " · " + "${{ github.sha }}"[:7] + "_\n\n```text\n"
+          body += content + "\n```"
+          print(json.dumps(body))
+          PY
+          )
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            -d "{\"body\": $BODY}"
 
       - name: Install PyYAML
         run: |
