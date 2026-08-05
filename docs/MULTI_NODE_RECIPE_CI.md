@@ -1,7 +1,7 @@
 # Multi-node Recipe CI
 
 该框架从手工维护的 `plan.yaml` 中间态开始。Recipe 文档到中间态的转换和自动拓扑生成
-不在当前范围内。第二阶段的真实 CI 目标用例是 `deepseek-v4-flash-a3-pd` 双节点 P/D
+不在当前范围内。第二阶段的真实 CI 目标用例是 `deepseek-v4-flash-a2-pd-reduced` 双节点 P/D
 分离；GitHub Actions 的基础设施层复用 vLLM Ascend 已有的 Kubernetes
 `LeaderWorkerSet`（LWS）方案。
 
@@ -27,7 +27,7 @@ scripts/recipe_ci/
 ├── result.py        # 结构化结果与原子 JSON
 ├── runner.py        # 线性节点生命周期
 ├── aisbench.py      # AISBench preflight 与指标转换
-├── k8s/lws.yaml.jinja2  # N 个 16 卡 A3 Pod 和共享卷
+├── k8s/lws.yaml.jinja2  # N 个 8 卡 A2 Pod 和共享卷
 └── run.sh           # 本地与 LWS 共用的唯一节点入口
 ```
 
@@ -60,7 +60,7 @@ v1 使用严格 schema，未知字段直接报错。v1 内只接受不改变执�
 验证 plan 不会检查模型、NPU 或启动进程：
 
 ```bash
-RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/plan.yaml \
+RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml \
 RECIPE_CI_VALIDATE_ONLY=true scripts/recipe_ci/run.sh
 ```
 
@@ -94,7 +94,7 @@ Workflow 还显式设置 `RECIPE_CI_INSTALL_AISBENCH=true`；本地可以预先�
 `install_aisbench.sh` 或按需设置该变量。普通自定义 evaluation 不会被入口脚本
 自动当作 AISBench。
 
-推荐在 vLLM Ascend 镜像中将 recipes 仓库放在同级目录：
+本地镜像中可将 recipes 仓库与 vLLM Ascend 源码放在同级目录：
 
 ```text
 /vllm-workspace/
@@ -102,8 +102,9 @@ Workflow 还显式设置 `RECIPE_CI_INSTALL_AISBENCH=true`；本地可以预先�
 └── vllm-ascend-recipes/  # CI checkout、挂载或本地 clone
 ```
 
-主流程从 recipes 根目录执行。`VLLM_ASCEND_ROOT` 默认是
-`/vllm-workspace/vllm-ascend`，并注入为 `RECIPE_VLLM_ASCEND_ROOT`。只有实际引用上游
+主流程从 recipes 根目录执行。`VLLM_ASCEND_ROOT` 本地默认是
+`/vllm-workspace/vllm-ascend`；A2 LWS 镜像显式设置为 `/opt/vllm-ascend`。该路径
+注入为 `RECIPE_VLLM_ASCEND_ROOT`。只有实际引用上游
 example 的 plan 才需要：
 
 ```text
@@ -192,7 +193,7 @@ JSON 通过同目录临时文件、fsync 和原子 replace 写入。`environment
 
 ## AISBench
 
-vLLM Ascend 的 A3 CI Dockerfile 在 `/vllm-workspace/vllm-ascend/benchmark` 安装固定
+vLLM Ascend CI 镜像可在 vLLM Ascend 源码目录的 `benchmark/` 安装固定
 tag。普通运行时镜像不一定包含它，可显式执行：
 
 ```bash
@@ -233,14 +234,15 @@ baseline 与 tolerance 使用 AISBench summary CSV 的原始 score 单位，不�
 
 performance 结果至少包含 TTFT、TPOT、E2E latency、output token/s 和 request/s。
 
-## DeepSeek V4 双节点 A3 用例
+## DeepSeek V4 双节点 A2 缩减用例
 
-`configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/` 是
-`models/en/DeepSeek/DeepSeek-V4-Flash.yaml` 的 A3 1P1D 手工中间态：
+`configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/` 是 A2 双节点 CI 中间态。
+它使用一个 Prefill 和一个 Decode 节点验证 P/D 主链路，不代表 Recipe 的
+完整 4P4D 性能拓扑：
 
 ```text
-node0 prefill: DP4 x TP4，16 NPU，7100-7103
-node1 decode:  DP16 x TP1，16 NPU，7100-7115
+node0 prefill: DP8 x TP1，8 A2 NPU，7100-7107
+node1 decode:  DP8 x TP1，8 A2 NPU，7100-7107
 node0 gateway: 38085
 ```
 
@@ -248,12 +250,13 @@ node0 gateway: 38085
 并按 `node0...nodeN` 顺序设置相同的 cluster IP 列表。node0 示例：
 
 ```bash
-export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/plan.yaml
-export RECIPE_CI_MODEL_PATH=/models/DeepSeek-V4-Flash-w8a8-mtp
+export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
+export RECIPE_CI_MODEL_PATH=/root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
+export VLLM_ASCEND_ROOT=/opt/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0
-export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export RECIPE_CI_EVALUATION=none
 scripts/recipe_ci/run.sh
 ```
@@ -288,24 +291,25 @@ workflow 分成选择用例和执行机制两层：
   -> 从 PVC 收集 Runner artifact、Pod 日志和 Ascend plog 后上传
 ```
 
-LWS 的 leader 和每个 worker 各申请 `16` 个 `huawei.com/ascend-1980`，使用同一 vLLM Ascend
-A3 镜像和同一份暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
+LWS 的 leader 和每个 worker 各申请 `8` 个 `huawei.com/Ascend910B`，并通过
+`node.kubernetes.io/npu.chip.name=910B4` 调度到 A2 节点。Pod 使用同一份
+Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本默认把容器可见
-设备表示为逻辑编号 `0..15`，交给 plan-local launcher 使用。
+设备表示为逻辑编号 `0..7`，交给 plan-local launcher 使用。
 
 CI 管理员需要配置：
 
 ```text
-Variable: RECIPE_CI_K8S_CONTROLLER_RUNNER   # 可选，默认 linux-aarch64-a3-0
-Variable: RECIPE_CI_A3_RESOURCE_GROUP       # 可选，并发锁对应的 A3 资源组
-Variable: RECIPE_CI_A3_PVC_NAME             # 可选，默认沿用 vllm-ascend A3 PVC
+Variable: RECIPE_CI_K8S_CONTROLLER_RUNNER   # 可选，默认 linux-aarch64-a2b4-0
+Variable: RECIPE_CI_RESOURCE_GROUP          # 可选，并发锁对应的 A2 资源组
+Variable: RECIPE_CI_PVC_NAME                # 可选，默认 vllm-ascend-vllm-ascend-recipes-gy001
 Variable: RECIPE_CI_AISBENCH_DATASET_DIR    # 可选，共享卷内数据集路径
 Secret:   KUBECONFIG_B64
 Secret:   RECIPE_CI_MODEL_PATH
 ```
 
 `RECIPE_CI_MODEL_PATH` 必须是所有 Pod 均可见的路径，通常位于已挂载的共享 PVC。基础镜像
-必须包含 `/vllm-workspace/vllm-ascend`；recipes 源码由 controller 暂存，不在 Pod 中联网
+必须包含 `/opt/vllm-ascend` 及 Mooncake runtime；recipes 源码由 controller 暂存，不在 Pod 中联网
 clone。`evaluation != none` 且镜像没有 AISBench 时，仅 node0 调用固定版本安装脚本。
 
 在真实 runner、secret 和容器取消语义验证稳定之前，不接入 PR 或 nightly 自动触发。

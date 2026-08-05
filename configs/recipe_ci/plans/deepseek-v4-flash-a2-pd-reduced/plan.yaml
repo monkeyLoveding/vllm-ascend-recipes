@@ -2,7 +2,7 @@ api_version: recipe-ci/v1
 kind: MultiNodePlan
 
 metadata:
-  name: deepseek-v4-flash-a3-pd
+  name: deepseek-v4-flash-a2-pd-reduced
 
 model:
   id: Eco-Tech/DeepSeek-V4-Flash-w8a8-mtp
@@ -14,14 +14,14 @@ nodes:
     launch: nodes/node0/run.sh
     readiness:
       port_start: 7100
-      count: 4
+      count: 8
 
   - id: node1
     role: decode
     launch: nodes/node1/run.sh
     readiness:
       port_start: 7100
-      count: 16
+      count: 8
 
 gateway:
   launch: gateway/run.sh

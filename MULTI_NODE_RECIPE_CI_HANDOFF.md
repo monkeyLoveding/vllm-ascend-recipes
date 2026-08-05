@@ -18,11 +18,14 @@ plan-local 脚本。控制面使用 HTTP，不依赖 Kubernetes 或共享文件�
 按本轮要求，第二阶段不增加或回归三、四节点用例。最终真实 CI 目标仅为：
 
 ```text
-configs/recipe_ci/plans/deepseek-v4-flash-a3-pd
-node0: A3 Prefill DP4 x TP4，16 卡
-node1: A3 Decode  DP16 x TP1，16 卡
+configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced
+node0: A2 Prefill DP8 x TP1，8 卡
+node1: A2 Decode  DP8 x TP1，8 卡
 gateway: node0:38085
 ```
+
+该用例是双节点 CI 缩减拓扑，不代表 DeepSeek V4 A2 Recipe 的完整 4P4D
+性能部署。
 
 现有 DeepSeek V2 两节点 P/D 和 Qwen 两节点普通内部 DP 只保留兼容，不作为本轮新增真实
 回归目标。
@@ -76,10 +79,10 @@ gateway: node0:38085
 
 ### DeepSeek V4 与 workflow
 
-- 新增 `configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/`，参数手工对齐
-  `models/en/DeepSeek/DeepSeek-V4-Flash.yaml` A3 1P1D 段。
+- 新增 `configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/`，使用 A2
+  `DP8 x TP1` 参数的双节点 1P1D 缩减拓扑。
 - node0/node1 使用上游 `launch_online_dp.py` 和各自 `run_dp_template.sh`。
-- gateway 显式列出 4 个 Prefill 和 16 个 Decode backend。
+- gateway 显式列出 8 个 Prefill 和 8 个 Decode backend。
 - completion、accuracy、performance 均为 plan-local 内容。
 - `.github/workflows/recipe_verify_multi_node.yaml` 只负责手动输入，并调用
   `_recipe_verify_multi_node.yaml` reusable workflow；当前默认用例是 DeepSeek V4 双节点，
@@ -87,7 +90,7 @@ gateway: node0:38085
 - reusable workflow 复用 vLLM Ascend 的单 controller Job + `LeaderWorkerSet` 方案，严格
   解析 `len(plan.nodes)` 作为 LWS size，并动态枚举任意 `node0...nodeN` Pod。
 - controller 把指定 ref（留空则为 workflow commit）的同一份 recipes 源码暂存到 PVC，
-  所有 16 卡 A3 Pod 直接运行 `scripts/recipe_ci/run.sh`；入口根据
+  所有 8 卡 A2 Pod 直接运行 `scripts/recipe_ci/run.sh`；入口根据
   `LWS_WORKER_INDEX` 选择 node0...nodeN，并由 LWS DNS 动态生成 `hosts.yaml`。
 - 本地与 LWS 只有一个公开入口。CI 由 LWS/Workflow 注入环境变量；本地手动
   设置相同的 `LWS_WORKER_INDEX`、`RECIPE_CI_CLUSTER_IPS`、网卡和可见卡。
@@ -99,7 +102,7 @@ gateway: node0:38085
 镜像内推荐目录：
 
 ```text
-/vllm-workspace/vllm-ascend
+/opt/vllm-ascend
 /vllm-workspace/vllm-ascend-recipes
 ```
 
@@ -107,12 +110,13 @@ gateway: node0:38085
 按 `node0...nodeN` 顺序设置同一份 IP 列表，然后分别前台运行。node0 示例：
 
 ```bash
-export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/plan.yaml
-export RECIPE_CI_MODEL_PATH=/path/to/DeepSeek-V4-Flash-w8a8-mtp
+export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
+export RECIPE_CI_MODEL_PATH=/root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
+export VLLM_ASCEND_ROOT=/opt/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0
-export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export RECIPE_CI_EVALUATION=none
 scripts/recipe_ci/run.sh
 ```
@@ -137,15 +141,15 @@ GSM8K 数据集目录默认是：
 
 ```text
 Variable: RECIPE_CI_K8S_CONTROLLER_RUNNER   # 可选
-Variable: RECIPE_CI_A3_RESOURCE_GROUP       # 可选
-Variable: RECIPE_CI_A3_PVC_NAME             # 可选
+Variable: RECIPE_CI_RESOURCE_GROUP          # 可选
+Variable: RECIPE_CI_PVC_NAME                # 可选，默认 vllm-ascend-vllm-ascend-recipes-gy001
 Variable: RECIPE_CI_AISBENCH_DATASET_DIR    # 可选
 Secret:   KUBECONFIG_B64
 Secret:   RECIPE_CI_MODEL_PATH
 ```
 
 模型路径必须能被所有 LWS Pod 访问，通常放在相同 PVC 中。CI 不需要配置节点 IP、网卡、
-两套 runner label 或空闲卡列表；Pod 调度和 16 卡分配由 K8s 完成。
+两套 runner label 或空闲卡列表；Pod 调度和 8 卡分配由 K8s 完成。
 
 ## 已执行的本地验证
 
@@ -212,7 +216,8 @@ primary failure、cleanup error、warning 或相关残留进程。
 
 ## 尚未完成或仍需外部资源
 
-- 尚未在两台 16 卡 A3 节点真实启动 DeepSeek V4 1P1D；这是最重要的剩余验收。
+- 尚未在两个 8 卡 A2 LWS Pod 真实启动 DeepSeek V4 reduced 1P1D；这是
+  最重要的剩余验收。
 - 尚未在真实 K8s controller runner 上执行 workflow_dispatch；kubeconfig、PVC、LWS
   controller、模型路径、Pod 取消和 plog 收集仍需管理员环境实测。
 - AISBench wrapper 已按固定 tag 源码格式和既有真实产物编写，但仍需用 DeepSeek V4 的

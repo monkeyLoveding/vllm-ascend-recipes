@@ -95,6 +95,7 @@ def parse_args() -> argparse.Namespace:
 
 def interface_addresses() -> dict[str, str]:
     """Return Linux interface-to-IPv4 mappings used for local node selection."""
+    addresses: dict[str, str] = {}
     try:
         result = subprocess.run(
             ["ip", "-o", "-4", "addr", "show"],
@@ -104,13 +105,31 @@ def interface_addresses() -> dict[str, str]:
             stderr=subprocess.DEVNULL,
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return {}
+        pass
+    else:
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) >= 4:
+                addresses[fields[1]] = fields[3].split("/", 1)[0]
+        if addresses:
+            return addresses
 
-    addresses: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        fields = line.split()
-        if len(fields) >= 4:
-            addresses[fields[1]] = fields[3].split("/", 1)[0]
+    # Minimal runtime images may not contain iproute2. SIOCGIFADDR keeps local
+    # and hostNetwork execution usable without adding another image dependency.
+    try:
+        import fcntl
+        import struct
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            for _, interface in socket.if_nameindex():
+                try:
+                    request = struct.pack("256s", interface[:15].encode())
+                    response = fcntl.ioctl(probe.fileno(), 0x8915, request)
+                except OSError:
+                    continue
+                addresses[interface] = socket.inet_ntoa(response[20:24])
+    except (ImportError, OSError):
+        pass
     return addresses
 
 

@@ -13,16 +13,20 @@ spec:
         labels:
           role: leader
       spec:
+        hostNetwork: true
         terminationGracePeriodSeconds: 120
-        tolerations:
-          - key: dedicated
-            operator: Equal
-            value: night
-            effect: NoSchedule
+        affinity: &recipe-ci-affinity
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: node.kubernetes.io/npu.chip.name
+                      operator: In
+                      values: [910B4]
         containers:
           - name: recipe-ci-leader
             image: {{ image }}
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             workingDir: {{ run_root }}/source
             command: [bash, {{ run_root }}/source/scripts/recipe_ci/run.sh]
             env: &recipe-ci-env
@@ -34,6 +38,8 @@ spec:
                 value: {{ evaluation }}
               - name: RECIPE_CI_INSTALL_AISBENCH
                 value: "true"
+              - name: RECIPE_CI_INSTALL_MOONCAKE
+                value: "true"
               - name: RECIPE_CI_STARTUP_TIMEOUT_SECONDS
                 value: "{{ startup_timeout_seconds }}"
               - name: RECIPE_CI_RUN_TIMEOUT_SECONDS
@@ -44,10 +50,10 @@ spec:
                 value: {{ run_root }}/artifacts
               - name: RECIPE_CI_PLOG_ROOT
                 value: {{ run_root }}/plogs
-              - name: RECIPE_CI_INTERFACE
-                value: eth0
               - name: RECIPE_CI_VISIBLE_DEVICES
-                value: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+                value: 0,1,2,3,4,5,6,7
+              - name: VLLM_ASCEND_ROOT
+                value: /opt/vllm-ascend
               - name: RECIPE_CI_IMAGE
                 value: {{ image }}
               - name: GITHUB_SHA
@@ -68,13 +74,16 @@ spec:
                 value: "0"
             resources: &recipe-ci-resources
               requests:
-                huawei.com/ascend-1980: 16
+                huawei.com/Ascend910B: 8
                 cpu: 125
-                ephemeral-storage: 100Gi
-              limits:
-                huawei.com/ascend-1980: 16
                 memory: 512Gi
                 ephemeral-storage: 100Gi
+              limits:
+                huawei.com/Ascend910B: 8
+                memory: 512Gi
+                ephemeral-storage: 100Gi
+            securityContext: &recipe-ci-security-context
+              privileged: true
             ports:
               - name: coordinator
                 containerPort: 29599
@@ -84,8 +93,10 @@ spec:
               - name: shared-volume
                 mountPath: /root/.cache
               - name: driver-tools
-                mountPath: /usr/local/Ascend/driver/tools
-              - name: dshm
+                mountPath: /usr/local/Ascend/driver
+              - name: worklogs
+                mountPath: /root/ascend/log
+              - name: shm-volume
                 mountPath: /dev/shm
         volumes: &recipe-ci-volumes
           - name: shared-volume
@@ -93,44 +104,26 @@ spec:
               claimName: {{ pvc_name }}
           - name: driver-tools
             hostPath:
-              path: /usr/local/Ascend/driver/tools
-          - name: dshm
+              path: /usr/local/Ascend/driver
+          - name: worklogs
+            emptyDir: {}
+          - name: shm-volume
             emptyDir:
               medium: Memory
-              sizeLimit: 512Gi
+              sizeLimit: 16Gi
     workerTemplate:
       spec:
+        hostNetwork: true
         terminationGracePeriodSeconds: 120
-        tolerations:
-          - key: dedicated
-            operator: Equal
-            value: night
-            effect: NoSchedule
+        affinity: *recipe-ci-affinity
         containers:
           - name: recipe-ci-worker
             image: {{ image }}
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             workingDir: {{ run_root }}/source
             command: [bash, {{ run_root }}/source/scripts/recipe_ci/run.sh]
             env: *recipe-ci-env
             resources: *recipe-ci-resources
+            securityContext: *recipe-ci-security-context
             volumeMounts: *recipe-ci-volume-mounts
         volumes: *recipe-ci-volumes
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ lws_name }}-leader
-  namespace: {{ namespace }}
-spec:
-  selector:
-    leaderworkerset.sigs.k8s.io/name: {{ lws_name }}
-    role: leader
-  ports:
-    - name: coordinator
-      port: 29599
-      targetPort: 29599
-    - name: gateway
-      port: 38085
-      targetPort: 38085
-  type: ClusterIP

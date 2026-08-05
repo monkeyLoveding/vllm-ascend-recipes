@@ -6,11 +6,11 @@ on:
       plan:
         description: Intermediate plan executed by the LWS pods
         type: string
-        default: configs/recipe_ci/plans/deepseek-v4-flash-a3-pd/plan.yaml
+        default: configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
       image:
-        description: vLLM Ascend A3 image used by every LWS pod
+        description: vLLM Ascend A2 image used by every LWS pod; Mooncake is installed at runtime
         type: string
-        default: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:nightly-ci-main-a3
+        default: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1
       evaluation:
         description: Optional AISBench stage run by the plan leader
         type: choice

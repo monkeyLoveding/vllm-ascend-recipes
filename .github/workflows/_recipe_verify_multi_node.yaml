@@ -8,10 +8,10 @@ on:
         required: true
         type: string
       image:
-        description: vLLM Ascend A3 image used by every LWS pod
+        description: vLLM Ascend A2 image used by every LWS pod; Mooncake is installed at runtime
         required: false
         type: string
-        default: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:nightly-ci-main-a3
+        default: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1
       evaluation:
         description: Optional AISBench stage run by the plan leader
         required: false
@@ -42,13 +42,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: recipe-ci-${{ vars.RECIPE_CI_A3_RESOURCE_GROUP || 'a3-k8s-multi-node' }}
+  group: recipe-ci-${{ vars.RECIPE_CI_RESOURCE_GROUP || 'a2b4-k8s-multi-node' }}
   cancel-in-progress: false
 
 jobs:
   recipe-ci:
     name: ${{ inputs.plan }}
-    runs-on: ${{ vars.RECIPE_CI_K8S_CONTROLLER_RUNNER || 'linux-aarch64-a3-0' }}
+    runs-on: ${{ vars.RECIPE_CI_K8S_CONTROLLER_RUNNER || 'linux-aarch64-a2b4-0' }}
     # Leave time for Pod scheduling, cleanup, and artifact upload around the
     # default one-hour startup plus four-hour coordinated run timeout.
     timeout-minutes: 360
@@ -56,7 +56,7 @@ jobs:
       image: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:nightly-cpu
       env:
         KUBECONFIG: /tmp/kubeconfig
-        NAMESPACE: vllm-project
+        NAMESPACE: vllm-ascend-vllm-ascend-recipes
     steps:
       - name: Decode kubeconfig
         env:
@@ -64,6 +64,12 @@ jobs:
         run: |
           test -n "$KUBECONFIG_B64"
           printf '%s' "$KUBECONFIG_B64" | base64 -d > "$KUBECONFIG"
+          chmod 600 "$KUBECONFIG"
+
+      - name: Check cluster access
+        run: |
+          set -euo pipefail
+          kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE"
 
       - name: Checkout recipes
         uses: actions/checkout@v4
@@ -127,26 +133,41 @@ jobs:
           MODEL_PATH: ${{ secrets.RECIPE_CI_MODEL_PATH }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout_seconds }}
           RUN_TIMEOUT: ${{ inputs.run_timeout_seconds }}
-          PVC_NAME: ${{ vars.RECIPE_CI_A3_PVC_NAME || 'gy005-az5-vllm-ascend' }}
+          PVC_NAME: ${{ vars.RECIPE_CI_PVC_NAME || 'vllm-ascend-vllm-ascend-recipes-gy001' }}
           AISBENCH_DATASET_DIR: ${{ vars.RECIPE_CI_AISBENCH_DATASET_DIR || '/vllm-workspace/vllm-ascend/benchmark/ais_bench/datasets/gsm8k' }}
         run: |
           set -euo pipefail
           test -n "$MODEL_PATH"
-          jinja2 scripts/recipe_ci/k8s/lws.yaml.jinja2 \
-            -D lws_name="$LWS_NAME" \
-            -D namespace="$NAMESPACE" \
-            -D image="$IMAGE" \
-            -D commit="$RECIPE_CI_COMMIT" \
-            -D run_root="$RECIPE_CI_RUN_ROOT" \
-            -D plan="$PLAN" \
-            -D model_path="$MODEL_PATH" \
-            -D evaluation="$EVALUATION" \
-            -D node_count="$RECIPE_CI_NODE_COUNT" \
-            -D startup_timeout_seconds="$STARTUP_TIMEOUT" \
-            -D run_timeout_seconds="$RUN_TIMEOUT" \
-            -D pvc_name="$PVC_NAME" \
-            -D aisbench_dataset_dir="$AISBENCH_DATASET_DIR" \
-            --outfile "$RECIPE_CI_RUN_ROOT/lws.yaml"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          template = Path("scripts/recipe_ci/k8s/lws.yaml.jinja2").read_text(
+              encoding="utf-8"
+          )
+          values = {
+              "lws_name": os.environ["LWS_NAME"],
+              "namespace": os.environ["NAMESPACE"],
+              "image": os.environ["IMAGE"],
+              "commit": os.environ["RECIPE_CI_COMMIT"],
+              "run_root": os.environ["RECIPE_CI_RUN_ROOT"],
+              "plan": os.environ["PLAN"],
+              "model_path": os.environ["MODEL_PATH"],
+              "evaluation": os.environ["EVALUATION"],
+              "node_count": os.environ["RECIPE_CI_NODE_COUNT"],
+              "startup_timeout_seconds": os.environ["STARTUP_TIMEOUT"],
+              "run_timeout_seconds": os.environ["RUN_TIMEOUT"],
+              "pvc_name": os.environ["PVC_NAME"],
+              "aisbench_dataset_dir": os.environ["AISBENCH_DATASET_DIR"],
+          }
+          for name, value in values.items():
+              template = template.replace("{{ " + name + " }}", value)
+          if "{{" in template:
+              raise SystemExit("unresolved LWS template value")
+          (Path(os.environ["RECIPE_CI_RUN_ROOT"]) / "lws.yaml").write_text(
+              template, encoding="utf-8"
+          )
+          PY
           kubectl apply -f "$RECIPE_CI_RUN_ROOT/lws.yaml"
 
       - name: Wait for LWS pods to start

@@ -22,7 +22,9 @@ from scripts.recipe_ci.plan import PlanError, load_hosts, load_plan  # noqa: E40
 
 EXAMPLE = ROOT / "configs/recipe_ci/plans/deepseek-v2-lite-pd-2n2c"
 GENERIC_DP_EXAMPLE = ROOT / "configs/recipe_ci/plans/qwen3-30b-a3b-dp-2n2c"
-DEEPSEEK_V4_EXAMPLE = ROOT / "configs/recipe_ci/plans/deepseek-v4-flash-a3-pd"
+DEEPSEEK_V4_EXAMPLE = (
+    ROOT / "configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced"
+)
 
 
 def free_port() -> int:
@@ -162,7 +164,7 @@ class PlanTests(unittest.TestCase):
 
         self.assertEqual(result.stdout.strip(), "5")
 
-    def test_deepseek_v4_plan_matches_the_two_node_a3_recipe_topology(self) -> None:
+    def test_deepseek_v4_plan_is_an_explicit_two_node_a2_reduced_topology(self) -> None:
         plan = load_plan(DEEPSEEK_V4_EXAMPLE / "plan.yaml")
         prefill_run = (DEEPSEEK_V4_EXAMPLE / plan.nodes[0].launch).read_text(
             encoding="utf-8"
@@ -182,17 +184,21 @@ class PlanTests(unittest.TestCase):
 
         self.assertEqual([node.id for node in plan.nodes], ["node0", "node1"])
         self.assertEqual([node.role for node in plan.nodes], ["prefill", "decode"])
-        self.assertEqual([node.readiness.count for node in plan.nodes], [4, 16])
-        for argument in ("--dp-size 4", "--tp-size 4", "--dp-size-local 4"):
+        self.assertEqual(plan.name, "deepseek-v4-flash-a2-pd-reduced")
+        self.assertEqual([node.readiness.count for node in plan.nodes], [8, 8])
+        for argument in ("--dp-size 8", "--tp-size 1", "--dp-size-local 8"):
             self.assertIn(argument, prefill_run)
-        for argument in ("--dp-size 16", "--tp-size 1", "--dp-size-local 16"):
+        for argument in ("--dp-size 8", "--tp-size 1", "--dp-size-local 8"):
             self.assertIn(argument, decode_run)
         self.assertIn('"kv_role": "kv_producer"', prefill_template)
         self.assertIn('"kv_port": "30000"', prefill_template)
         self.assertIn('"kv_role": "kv_consumer"', decode_template)
         self.assertIn('"kv_port": "30100"', decode_template)
-        self.assertEqual(gateway.count('"$RECIPE_NODE_0_IP"'), 4)
-        self.assertEqual(gateway.count('"$RECIPE_NODE_1_IP"'), 16)
+        self.assertIn('"prefill": {"dp_size": 8, "tp_size": 1}', prefill_template)
+        self.assertIn('"decode": {"dp_size": 8, "tp_size": 1}', decode_template)
+        self.assertEqual(gateway.count('"$RECIPE_NODE_0_IP"'), 8)
+        self.assertEqual(gateway.count('"$RECIPE_NODE_1_IP"'), 8)
+        self.assertNotIn("RECIPE_NODE_2_IP", gateway)
 
 
 class LocalRunnerTests(unittest.TestCase):

@@ -124,6 +124,12 @@ fi
 echo "Recipe CI node: index=$LWS_WORKER_INDEX id=$node_id ip=${cluster_ips[$LWS_WORKER_INDEX]}"
 echo "Recipe CI visible devices: ${RECIPE_CI_VISIBLE_DEVICES:-container default}"
 
+if [[ "${RECIPE_CI_INSTALL_MOONCAKE:-false}" == "true" ]]; then
+    mooncake_lib_dir=$("$SCRIPT_DIR/install_mooncake.sh")
+    export LD_LIBRARY_PATH="${mooncake_lib_dir}:${LD_LIBRARY_PATH:-}"
+    echo "Mooncake library path: ${mooncake_lib_dir}"
+fi
+
 evaluation=${RECIPE_CI_EVALUATION:-none}
 if [[ "${RECIPE_CI_INSTALL_AISBENCH:-false}" == "true" && "$evaluation" != "none" && "$node_id" == "node0" ]]; then
     if ! command -v "${RECIPE_AISBENCH_BIN:-ais_bench}" >/dev/null 2>&1; then

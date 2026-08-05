@@ -10,6 +10,12 @@
 > `LWS_WORKER_INDEX`、`RECIPE_CI_CLUSTER_IPS`、网卡和可见卡。任务书后文中的每节点
 > Actions job、`--hosts`、`--node-id` 公开调用等旧建议不再适用。最终状态以
 > `MULTI_NODE_RECIPE_CI_HANDOFF.md` 和 `docs/MULTI_NODE_RECIPE_CI.md` 为准。
+>
+> 最新硬件决策：CI controller 是 `linux-aarch64-a2b4-0`，LWS Pod 申请每节点
+> 8 个 `huawei.com/Ascend910B` 并调度到 `910B4`；DeepSeek V4 目标是明确标注的
+> A2 双节点 reduced 1P1D，不增加 node2 以上的节点，也不宣称等价于完整
+> 4P4D Recipe 性能拓扑。CI 保留共享 PVC
+> `vllm-ascend-vllm-ascend-recipes-gy001`。
 
 ## 0. 基本信息
 
