@@ -303,7 +303,10 @@ jobs:
           PROXY_COMMAND: ${{ inputs.proxy_command }}
           RUN_ID: r${{ github.run_id }}
         run: |
-          set -o pipefail
+          # NOTE: this runner's container hook executes steps with `sh -e`, NOT
+          # bash — `set -o pipefail` is a bashism and would fail with
+          # "Illegal option". There is no pipe here anyway; sh -e propagates the
+          # python exit code.
           mkdir -p /tmp/multinode-results
           python3 scripts/multinode/controller.py \
             --recipe "${{ needs.prepare.outputs.recipe }}" \
