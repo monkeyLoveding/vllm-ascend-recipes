@@ -489,9 +489,18 @@ def detect_api_port(plan: dict) -> int:
 def wait_pods_ready(selector: str, args, total: int) -> None:
     deadline = time.time() + args.pod_wait_min * 60
     ready = 0
+    it = 0
     while time.time() < deadline:
+        it += 1
         ready = pod_count_ready(selector, args)
         print(f"[controller] pods ready {ready}/{total}", flush=True)
+        # Every ~30s (loop sleeps 15s, so every 2nd pass) and on the final
+        # check, dump the pod table so per-pod state (Pending / Running /
+        # CrashLoopBackOff, node, IP) is visible in the step log.
+        if it % 2 == 1 or ready == total:
+            table = kubectl_capture(f"get pods -l {selector} -o wide", args)
+            if table:
+                print(table.rstrip(), flush=True)
         if ready == total:
             return
         time.sleep(15)
