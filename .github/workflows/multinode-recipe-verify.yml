@@ -296,6 +296,12 @@ jobs:
       - name: Install PyYAML
         run: |
           python3 -m pip install pyyaml --quiet 2>/dev/null || pip install pyyaml --quiet || true
+          # Don't let a silent pip failure surface later as a controller
+          # ModuleNotFoundError — verify pyyaml is actually importable now.
+          python3 -c "import yaml; print('pyyaml OK', yaml.__version__)" || {
+            echo "::error::pyyaml is not importable — the controller needs it (pip install may have failed silently)"
+            exit 1
+          }
 
       - name: Run multi-node controller
         id: controller
