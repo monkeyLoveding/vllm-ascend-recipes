@@ -504,6 +504,9 @@ def wait_pods_ready(selector: str, lws_name: str, args, total: int) -> None:
             table = kubectl_capture(f"get pods -l {selector} -o wide", args)
             if table:
                 print(table.rstrip(), flush=True)
+            else:
+                print(f"(no pods matching {selector} — the LWS controller has "
+                      "not created them yet)", flush=True)
             leader = kubectl_capture(f"logs {lws_name}-0 --tail=60", args)
             if leader:
                 print(f"--- {lws_name}-0 log (tail 60) ---", flush=True)
