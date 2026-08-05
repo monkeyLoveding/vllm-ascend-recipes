@@ -486,7 +486,7 @@ def detect_api_port(plan: dict) -> int:
     return int(m.group(1)) if m else 7100
 
 
-def wait_pods_ready(selector: str, args, total: int) -> None:
+def wait_pods_ready(selector: str, lws_name: str, args, total: int) -> None:
     deadline = time.time() + args.pod_wait_min * 60
     ready = 0
     it = 0
@@ -495,12 +495,22 @@ def wait_pods_ready(selector: str, args, total: int) -> None:
         ready = pod_count_ready(selector, args)
         print(f"[controller] pods ready {ready}/{total}", flush=True)
         # Every ~30s (loop sleeps 15s, so every 2nd pass) and on the final
-        # check, dump the pod table so per-pod state (Pending / Running /
-        # CrashLoopBackOff, node, IP) is visible in the step log.
+        # check, dump the pod table + the leader's pod log. That makes per-pod
+        # state (Pending / Running / CrashLoopBackOff, node, IP) AND why the
+        # leader isn't Ready (e.g. missing Mooncake, bad image) visible in the
+        # step log. Other nodes' logs are captured to the artifact on failure
+        # via dump_logs.
         if it % 2 == 1 or ready == total:
             table = kubectl_capture(f"get pods -l {selector} -o wide", args)
             if table:
                 print(table.rstrip(), flush=True)
+            leader = kubectl_capture(f"logs {lws_name}-0 --tail=60", args)
+            if leader:
+                print(f"--- {lws_name}-0 log (tail 60) ---", flush=True)
+                print(leader.rstrip(), flush=True)
+            else:
+                print(f"(no {lws_name}-0 log yet — pod may not be running)",
+                      flush=True)
         if ready == total:
             return
         time.sleep(15)
@@ -657,7 +667,7 @@ def run_pipeline(plan: dict, args, stages: Stages, results_dir: Path) -> None:
     lws_name = plan["lws_name"]
     selector = f"leaderworkerset.sigs.k8s.io/name={lws_name}"
     total = plan["topology"]["prefill"] + plan["topology"]["decode"]
-    wait_pods_ready(selector, args, total)
+    wait_pods_ready(selector, lws_name, args, total)
     stages.ok("pods_ready")
 
     prefill_ip = pod_ip(f"{lws_name}-0", args)
