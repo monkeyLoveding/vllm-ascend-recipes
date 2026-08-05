@@ -313,17 +313,23 @@ jobs:
           # bash — `set -o pipefail` is a bashism and would fail with
           # "Illegal option". There is no pipe here anyway; sh -e propagates the
           # python exit code.
+          #
+          # The `inputs.* || 'default'` fallbacks matter: `inputs` is only
+          # populated on workflow_dispatch. On a pull_request run every
+          # `inputs.*` is EMPTY, which would make argparse fail on the int args
+          # ("invalid int value: ''"). Defaulting here keeps both trigger paths
+          # identical.
           mkdir -p /tmp/multinode-results
           python3 scripts/multinode/controller.py \
             --recipe "${{ needs.prepare.outputs.recipe }}" \
-            --hw-filter "${{ inputs.hw_filter }}" \
-            --deployment-filter "${{ inputs.deployment_filter }}" \
-            --prefill-nodes "${{ inputs.prefill_nodes }}" \
-            --decode-nodes "${{ inputs.decode_nodes }}" \
-            --npu-per-node "${{ inputs.npu_per_node }}" \
-            --image "${{ inputs.image }}" \
+            --hw-filter "${{ inputs.hw_filter || 'A2' }}" \
+            --deployment-filter "${{ inputs.deployment_filter || 'PD' }}" \
+            --prefill-nodes "${{ inputs.prefill_nodes || '0' }}" \
+            --decode-nodes "${{ inputs.decode_nodes || '0' }}" \
+            --npu-per-node "${{ inputs.npu_per_node || '0' }}" \
+            --image "${{ inputs.image || 'swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1' }}" \
             --run-id "$RUN_ID" \
-            --proxy-port "${{ inputs.proxy_port }}" \
+            --proxy-port "${{ inputs.proxy_port || '8088' }}" \
             --results-dir /tmp/multinode-results \
             ${{ inputs.run_eval == 'true' && '--run-eval' || '' }}
 
