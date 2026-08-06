@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # The ARC container hook otherwise executes run steps with /bin/sh.
+    shell: bash -el {0}
+
 concurrency:
   group: recipe-ci-a2b4-k8s-multi-node
   cancel-in-progress: false
@@ -41,9 +46,12 @@ jobs:
         env:
           PLAN: ${{ inputs.plan }}
         run: |
-          set -euo pipefail
           bundle=/tmp/recipe-ci-bundle
           mkdir -p "$bundle/controller-logs" "$bundle/pod-logs"
+          printf 'plan=%s\nrun_id=%s\n' "$PLAN" "$GITHUB_RUN_ID" \
+            > "$bundle/controller-logs/bootstrap.log"
+
+          set -euo pipefail
           exec > >(tee -a "$bundle/controller-logs/initialize.log") 2>&1
 
           plan_name=$(basename "$(dirname "$PLAN")")
@@ -295,6 +303,7 @@ jobs:
 
       - name: Upload Recipe CI bundle
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.initialize.outputs.artifact_name || format('recipe-ci-diagnostics-{0}', github.run_id) }}
