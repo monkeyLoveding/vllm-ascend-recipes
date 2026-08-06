@@ -269,16 +269,31 @@ def check_mooncake() -> bool:
     hits: list[str] = []
     for pat in patterns:
         hits.extend(glob.glob(pat))
+    # Diagnostic + wider scan: if the targeted globs miss, walk the tree for
+    # any mooncake package dir so we can see where it actually lives.
+    if not hits:
+        for root in ("/usr/local", "/usr/lib", "/opt"):
+            for dirpath, dirnames, _ in os.walk(root):
+                if "mooncake" in dirnames:
+                    p = os.path.join(dirpath, "mooncake")
+                    if p not in hits:
+                        hits.append(p)
+                        log(f"found mooncake by walk: {p}")
+                dirnames[:] = [d for d in dirnames if d != "mooncake"]
     for h in hits:
         parent = os.path.dirname(h)
         if parent not in sys.path:
             sys.path.insert(0, parent)
         os.environ["LD_LIBRARY_PATH"] = (h + ":"
                                          + os.environ.get("LD_LIBRARY_PATH", ""))
+        log(f"mooncake candidate: {h}")
     try:
         from mooncake.engine import TransferEngine  # type: ignore  # noqa: F401
+        log("mooncake.engine import OK")
         return True
-    except Exception:  # ImportError / OSError when the .so is missing
+    except Exception as exc:  # ImportError / OSError when the .so is missing
+        log(f"mooncake import failed: {exc!r}")
+        log(f"LD_LIBRARY_PATH={os.environ.get('LD_LIBRARY_PATH', '')}")
         return False
 
 
