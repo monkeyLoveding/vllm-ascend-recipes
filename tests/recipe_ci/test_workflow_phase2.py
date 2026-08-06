@@ -79,6 +79,8 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn('kubectl logs -f "$pod"', text)
         self.assertIn('> >(sed -u "s/^/[node${index}] /") 2>&1 &', text)
         self.assertIn('wait "$pid"', text)
+        self.assertIn('node_failed=true', text)
+        self.assertIn('"$node_failed" == true || "$all_finished" == true', text)
         self.assertNotIn('| sed -u "s/^/[node${index}] /"', text)
 
         # Pod placement, addresses, and visible devices are supplied by LWS/K8s,
@@ -214,7 +216,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn("awk 'NR == 1 {print $1}' || true", text)
         self.assertIn("Waiting for cluster DNS", text)
         self.assertIn("npu-smi info", text)
-        self.assertIn('python3 "$SCRIPT_DIR/runner.py"', text)
+        self.assertIn('python3 -u "$SCRIPT_DIR/runner.py"', text)
         self.assertFalse((ROOT / "scripts/recipe_ci/k8s/run_node.sh").exists())
         self.assertNotIn("pytest", text)
         self.assertNotIn("pkill", text)

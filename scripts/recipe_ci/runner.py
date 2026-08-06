@@ -455,6 +455,10 @@ def run_node(
 
     with signal_cancellation_event() as cancellation:
         try:
+            def check_cancellation() -> None:
+                if cancellation.is_set():
+                    raise CancellationRequested("cancellation requested")
+
             if node.id == plan.leader.id:
                 coordinator = LeaderCoordinator(
                     [item.id for item in plan.nodes],
@@ -462,6 +466,11 @@ def run_node(
                     artifact_directory / "coordinator.log",
                 )
                 coordinator.start()
+            else:
+                print(f"[{node.id}] waiting for the leader coordinator")
+                client.wait_available(
+                    args.startup_timeout_seconds, check_cancellation
+                )
 
             print(
                 f"[{node.id}] starting service launcher; "
@@ -480,8 +489,7 @@ def run_node(
             runtime_processes.append(service_process)
 
             def check_local_runtime() -> None:
-                if cancellation.is_set():
-                    raise CancellationRequested("cancellation requested")
+                check_cancellation()
                 check_processes(runtime_processes)
 
             try:

@@ -27,7 +27,7 @@ if [[ -f /usr/local/Ascend/nnal/atb/set_env.sh ]]; then
 fi
 
 if [[ "${RECIPE_CI_VALIDATE_ONLY:-false}" == "true" ]]; then
-    exec python3 "$SCRIPT_DIR/runner.py" \
+    exec python3 -u "$SCRIPT_DIR/runner.py" \
         --plan "$RECIPE_CI_PLAN" \
         --validate-only
 fi
@@ -166,7 +166,7 @@ forward_signal() {
 trap 'forward_signal TERM' TERM
 trap 'forward_signal INT' INT
 
-python3 "$SCRIPT_DIR/runner.py" \
+python3 -u "$SCRIPT_DIR/runner.py" \
     --plan "$RECIPE_CI_PLAN" \
     --hosts "$hosts_file" \
     --node-id "$node_id" \

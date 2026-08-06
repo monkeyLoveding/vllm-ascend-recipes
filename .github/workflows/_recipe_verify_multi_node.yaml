@@ -232,11 +232,22 @@ jobs:
           deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS + RUN_TIMEOUT_SECONDS))
           while ((SECONDS < deadline)); do
             all_finished=true
+            node_failed=false
             for index in "${!pods[@]}"; do
               status_file="$RECIPE_CI_RUN_ROOT/pod-status/node${index}.exit"
-              [[ -f "$status_file" ]] || all_finished=false
+              if [[ -f "$status_file" ]]; then
+                exit_code=$(<"$status_file")
+                if [[ "$exit_code" != 0 ]]; then
+                  echo "node${index} failed with exit code $exit_code; stopping the run"
+                  node_failed=true
+                fi
+              else
+                all_finished=false
+              fi
             done
-            [[ "$all_finished" == true ]] && break
+            if [[ "$node_failed" == true || "$all_finished" == true ]]; then
+              break
+            fi
             sleep 5
           done
 
