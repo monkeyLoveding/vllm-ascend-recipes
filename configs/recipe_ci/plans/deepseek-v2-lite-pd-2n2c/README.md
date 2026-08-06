@@ -113,8 +113,8 @@ plan 中声明的 completion、accuracy 和 performance 会全部执行。运行
 格式样本，evaluation 会把它链接到 AISBench 的标准数据目录，不再运行时下载数据集。
 
 plan 内的 `aisbench/models/vllm_api_general_chat.py` 和 `vllm_api_stream_chat.py` 是
-Recipe 转换产物，分别供精度和性能评测使用。它们会读取当前 endpoint、模型路径和
-served model，无需修改 AISBench 安装目录。模型配置名可分别通过
+Recipe 转换产物，分别供精度和性能评测使用。evaluation 会根据当前 endpoint、模型路径和
+served model 将占位符渲染到 artifact 目录，无需修改 AISBench 安装目录。模型配置名可分别通过
 `RECIPE_AISBENCH_ACCURACY_MODEL_CONFIG` 和
 `RECIPE_AISBENCH_PERFORMANCE_MODEL_CONFIG` 覆盖；样本数可通过
 `RECIPE_AISBENCH_ACCURACY_NUM_PROMPTS` 和

@@ -86,7 +86,12 @@ class PlanTests(unittest.TestCase):
         )
 
     def test_examples_keep_aisbench_model_config_in_the_plan(self) -> None:
-        for example in (EXAMPLE, GENERIC_DP_EXAMPLE):
+        for example in (
+            EXAMPLE,
+            GENERIC_DP_EXAMPLE,
+            DEEPSEEK_V4_EXAMPLE,
+            QWEN35_EXAMPLE,
+        ):
             accuracy_config = example / "aisbench/models/vllm_api_general_chat.py"
             performance_config = example / "aisbench/models/vllm_api_stream_chat.py"
             accuracy_script = (example / "evaluations/accuracy.sh").read_text(
@@ -102,6 +107,13 @@ class PlanTests(unittest.TestCase):
             self.assertIn("vllm_api_general_chat", accuracy_script)
             self.assertIn("$RECIPE_PLAN_DIR/aisbench", performance_script)
             self.assertIn("vllm_api_stream_chat", performance_script)
+            for config in (accuracy_config, performance_config):
+                text = config.read_text(encoding="utf-8")
+                self.assertNotIn("import os", text)
+                self.assertIn("path=__RECIPE_MODEL_PATH__", text)
+                self.assertIn("host_port=__RECIPE_ENDPOINT_PORT__", text)
+            self.assertIn("render-model-config", accuracy_script)
+            self.assertIn("render-model-config", performance_script)
 
     def test_lightweight_plan_carries_an_offline_gsm8k_fixture(self) -> None:
         dataset = EXAMPLE / "aisbench/datasets/gsm8k"

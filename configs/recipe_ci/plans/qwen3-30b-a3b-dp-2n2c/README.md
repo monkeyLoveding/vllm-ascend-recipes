@@ -101,7 +101,7 @@ rank 已连接。每节点直接消费 `ASCEND_RT_VISIBLE_DEVICES` 中的两张�
 plan 中声明的 check、accuracy 和 performance 都会执行，因此应先按
 `docs/MULTI_NODE_RECIPE_CI.md` 安装 AISBench 和 GSM8K 数据集。plan 内的
 `vllm_api_general_chat.py` 和 `vllm_api_stream_chat.py` 分别供精度和性能评测使用，
-并自动读取当前 endpoint 和 served model；样本数可通过
+evaluation 会用当前 endpoint 和 served model 渲染后再执行；样本数可通过
 `RECIPE_AISBENCH_ACCURACY_NUM_PROMPTS` 和
 `RECIPE_AISBENCH_PERFORMANCE_NUM_PROMPTS` 调整。Runner 不会清理任何代理环境变量，
 只会把节点 IP 加入 `NO_PROXY`。

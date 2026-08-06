@@ -228,8 +228,10 @@ commit: 0da56eadb2ac85c31c2540f4f5b69af3ec5717a5
 
 因此这条 CI 不依赖共享 PVC 预置或在线下载完整 GSM8K。每个 plan 分别携带 accuracy 的
 `vllm_api_general_chat.py` 和 performance 的
-`vllm_api_stream_chat.py`。evaluation 正式运行前检查命令、`-h`、模型配置可加载、数据集
-目录、endpoint 环境和 artifact 可写性。AISBench wrapper 从产物提取指标并写
+`vllm_api_stream_chat.py`。evaluation 将其中少量运行时占位符渲染到当前 step 的 artifact
+目录，再交给 AISBench，避免修改上游安装目录或依赖 MMEngine 的 lazy-import 细节。
+正式运行前检查命令、`-h`、渲染后的模型配置、数据集目录、endpoint 环境和 artifact
+可写性。AISBench wrapper 从产物提取指标并写
 `RECIPE_STEP_RESULT_FILE`；Runner 不解析 AISBench 私有日志。
 
 默认少量样本是流程 smoke，只验证请求和产物。设置以下变量才启用 accuracy gate：
