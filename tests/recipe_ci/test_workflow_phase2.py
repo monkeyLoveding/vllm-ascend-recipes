@@ -71,6 +71,8 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertNotIn("RECIPE_CI_EVALUATION", text)
         self.assertNotIn("RECIPE_CI_A3_", text)
         self.assertIn("/tmp/recipe-ci-pods.txt", text)
+        self.assertIn('"$RECIPE_CI_RUN_ROOT/pod-status/node${index}.exit"', text)
+        self.assertNotIn("state.terminated.exitCode", text)
         self.assertIn('for index in "${!pods[@]}"', text)
         self.assertNotIn("LEADER_POD", text)
         self.assertNotIn("WORKER_POD", text)
@@ -112,7 +114,12 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         leader = template["leaderTemplate"]["spec"]["containers"][0]
         worker = template["workerTemplate"]["spec"]["containers"][0]
         self.assertEqual(leader["command"], worker["command"])
-        self.assertTrue(leader["command"][1].endswith("/scripts/recipe_ci/run.sh"))
+        self.assertEqual(leader["command"][:2], ["bash", "-c"])
+        self.assertIn("/scripts/recipe_ci/run.sh", leader["command"][2])
+        self.assertIn(
+            "pod-status/node${LWS_WORKER_INDEX}.exit", leader["command"][2]
+        )
+        self.assertIn("exec sleep infinity", leader["command"][2])
         self.assertEqual(leader["env"], worker["env"])
         self.assertEqual(leader["resources"], worker["resources"])
         self.assertEqual(leader["resources"]["requests"]["huawei.com/ascend-1980"], 2)

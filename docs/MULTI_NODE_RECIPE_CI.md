@@ -296,7 +296,8 @@ workflow 分成选择用例和执行机制两层：
   -> LWS_WORKER_INDEX 映射 node0...nodeN
   -> LWS DNS 生成临时 hosts.yaml
   -> 所有 Runner 继续通过 HTTP coordinator 协调
-  -> controller 枚举全部 Pod，流式输出日志、检查退出码并删除 LWS
+  -> 每个节点把退出码写入共享 PVC，controller 收齐后删除 LWS
+  -> Pod 写完退出码后保持运行，避免 CCE LWS 的容器重启策略吞掉完成状态
   -> 从 PVC 收集 Runner artifact、Pod 日志和 Ascend plog 后上传
 ```
 

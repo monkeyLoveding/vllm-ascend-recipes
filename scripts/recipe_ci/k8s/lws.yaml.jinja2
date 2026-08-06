@@ -34,7 +34,17 @@ spec:
             image: {{ image }}
             imagePullPolicy: IfNotPresent
             workingDir: {{ run_root }}/source
-            command: [bash, {{ run_root }}/source/scripts/recipe_ci/run.sh]
+            command: &recipe-ci-command
+              - bash
+              - -c
+              - |
+                set +e
+                bash {{ run_root }}/source/scripts/recipe_ci/run.sh
+                status=$?
+                status_file={{ run_root }}/pod-status/node${LWS_WORKER_INDEX}.exit
+                printf '%s\n' "$status" > "$status_file.tmp"
+                mv "$status_file.tmp" "$status_file"
+                exec sleep infinity
             env: &recipe-ci-env
               - name: RECIPE_CI_PLAN
                 value: {{ plan }}
@@ -123,7 +133,7 @@ spec:
             image: {{ image }}
             imagePullPolicy: IfNotPresent
             workingDir: {{ run_root }}/source
-            command: [bash, {{ run_root }}/source/scripts/recipe_ci/run.sh]
+            command: *recipe-ci-command
             env: *recipe-ci-env
             resources: *recipe-ci-resources
             securityContext: *recipe-ci-security-context

@@ -121,7 +121,7 @@ jobs:
             *) echo "Unsafe run root: $RECIPE_CI_RUN_ROOT" >&2; exit 1 ;;
           esac
           rm -rf -- "$RECIPE_CI_RUN_ROOT"
-          mkdir -p "$RECIPE_CI_RUN_ROOT/source"
+          mkdir -p "$RECIPE_CI_RUN_ROOT/source" "$RECIPE_CI_RUN_ROOT/pod-status"
           cp -a "$GITHUB_WORKSPACE"/. "$RECIPE_CI_RUN_ROOT/source/"
 
           : > /tmp/recipe-ci-pods.txt
@@ -228,24 +228,24 @@ jobs:
 
           deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS + RUN_TIMEOUT_SECONDS))
           while ((SECONDS < deadline)); do
-            all_terminal=true
-            for pod in "${pods[@]}"; do
-              phase=$(kubectl get pod "$pod" -n "$NAMESPACE" \
-                -o jsonpath='{.status.phase}' 2>/dev/null || true)
-              if [[ ! "$phase" =~ ^(Succeeded|Failed)$ ]]; then
-                all_terminal=false
-              fi
+            all_finished=true
+            for index in "${!pods[@]}"; do
+              status_file="$RECIPE_CI_RUN_ROOT/pod-status/node${index}.exit"
+              [[ -f "$status_file" ]] || all_finished=false
             done
-            [[ "$all_terminal" == true ]] && break
+            [[ "$all_finished" == true ]] && break
             sleep 5
           done
 
           failed=0
           for index in "${!pods[@]}"; do
-            pod=${pods[$index]}
-            exit_code=$(kubectl get pod "$pod" -n "$NAMESPACE" \
-              -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null || true)
-            echo "Recipe CI pod exit code: node${index}=${exit_code:-not-terminated}"
+            status_file="$RECIPE_CI_RUN_ROOT/pod-status/node${index}.exit"
+            if [[ -f "$status_file" ]]; then
+              exit_code=$(<"$status_file")
+            else
+              exit_code=
+            fi
+            echo "Recipe CI node exit code: node${index}=${exit_code:-not-finished}"
             [[ "$exit_code" == 0 ]] || failed=1
           done
           exit "$failed"
@@ -306,6 +306,9 @@ jobs:
           fi
           if [[ -n "${RECIPE_CI_RUN_ROOT:-}" && -d "$RECIPE_CI_RUN_ROOT/plogs" ]]; then
             cp -a "$RECIPE_CI_RUN_ROOT/plogs" "$bundle/"
+          fi
+          if [[ -n "${RECIPE_CI_RUN_ROOT:-}" && -d "$RECIPE_CI_RUN_ROOT/pod-status" ]]; then
+            cp -a "$RECIPE_CI_RUN_ROOT/pod-status" "$bundle/"
           fi
           for ((index = 0; index < ${RECIPE_CI_NODE_COUNT:-0}; index++)); do
             cp "/tmp/recipe-ci-node${index}.log" \
