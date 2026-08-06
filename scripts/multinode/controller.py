@@ -318,6 +318,13 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
     npu = plan.get("npu_per_node") or args.npu_per_node
     return {
         "hostNetwork": True,
+        # hostNetwork pods default to dnsPolicy: Default (the node's
+        # resolv.conf), which has no cluster search domains -> the LWS headless
+        # service DNS (<pod>.<group>.<ns>.svc.cluster.local) would NOT resolve
+        # and node_entry could not find its peers. ClusterFirstWithHostNet
+        # routes hostNetwork-pod DNS through CoreDNS with the pod's search
+        # domains, fixing peer resolution.
+        "dnsPolicy": "ClusterFirstWithHostNet",
         # No pod-level restartPolicy: the CCE LWS addon (cceaddon-lws-
         # controller-manager) creates a StatefulSet per subgroup, and K8s
         # rejects StatefulSet pod templates with restartPolicy != "Always".
