@@ -4,11 +4,14 @@ set -euo pipefail
 aisbench_root=${RECIPE_AISBENCH_ROOT:-$RECIPE_VLLM_ASCEND_ROOT/benchmark}
 config_dir=${RECIPE_AISBENCH_CONFIG_DIR:-$RECIPE_PLAN_DIR/aisbench}
 model_config=${RECIPE_AISBENCH_PERFORMANCE_MODEL_CONFIG:-vllm_api_stream_chat}
+dataset_directory=$aisbench_root/ais_bench/datasets/gsm8k
+
+"$RECIPE_PLAN_DIR/evaluations/prepare_gsm8k.sh"
 
 python3 "$RECIPE_REPOSITORY_ROOT/scripts/recipe_ci/aisbench.py" preflight \
     --command "${RECIPE_AISBENCH_BIN:-ais_bench}" \
     --model-config "$config_dir/models/$model_config.py" \
-    --dataset-directory "${RECIPE_AISBENCH_PERFORMANCE_DATASET_DIR:-$aisbench_root/ais_bench/datasets/gsm8k}" \
+    --dataset-directory "$dataset_directory" \
     --artifact-directory "$RECIPE_STEP_ARTIFACT_DIR"
 
 cd "$RECIPE_STEP_ARTIFACT_DIR"

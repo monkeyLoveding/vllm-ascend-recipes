@@ -109,7 +109,8 @@ IP 补充 `NO_PROXY`。
 ## AISBench 阶段
 
 plan 中声明的 completion、accuracy 和 performance 会全部执行。运行前应按
-`docs/MULTI_NODE_RECIPE_CI.md` 安装 AISBench 和 GSM8K 数据集。
+`docs/MULTI_NODE_RECIPE_CI.md` 安装 AISBench。这个轻量 plan 自带 8 条离线 GSM8K
+格式样本，evaluation 会把它链接到 AISBench 的标准数据目录，不再运行时下载数据集。
 
 plan 内的 `aisbench/models/vllm_api_general_chat.py` 和 `vllm_api_stream_chat.py` 是
 Recipe 转换产物，分别供精度和性能评测使用。它们会读取当前 endpoint、模型路径和

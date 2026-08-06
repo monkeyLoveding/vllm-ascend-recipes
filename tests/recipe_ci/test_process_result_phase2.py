@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import signal
@@ -58,6 +59,26 @@ class ProcessTests(unittest.TestCase):
             self.assertFalse(process_group_exists(child.process_group))
             self.assertIn("tail", tail_log(log_path))
             self.assertIn("�", tail_log(log_path))
+
+    def test_process_output_can_be_kept_and_mirrored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            log_path = root / "child.log"
+            mirror = io.BytesIO()
+            child = start_process(
+                "visible child",
+                ["bash", "-c", "printf 'vllm startup\\n'"],
+                cwd=root,
+                environment=os.environ,
+                log_path=log_path,
+                mirror_output=mirror,
+            )
+            child.process.wait(timeout=2)
+            errors = stop_processes([child])
+
+            self.assertEqual(errors, [])
+            self.assertEqual(log_path.read_bytes(), b"vllm startup\n")
+            self.assertEqual(mirror.getvalue(), b"vllm startup\n")
 
 
 class ResultTests(unittest.TestCase):

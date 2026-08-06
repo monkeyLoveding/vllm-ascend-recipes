@@ -219,13 +219,15 @@ commit: 0da56eadb2ac85c31c2540f4f5b69af3ec5717a5
 安装脚本固定使用最后一个兼容 NumPy 1.x 的 OpenCV 版本，避免 pip 下载多个 30 MB 以上
 的 wheel 进行依赖回溯。
 
-GSM8K 数据集按 AISBench 约定放在：
+轻量双节点 plan 自带 8 条 GSM8K 格式的离线 smoke 数据，并在运行时链接到 AISBench
+约定的位置：
 
 ```text
 /vllm-workspace/vllm-ascend/benchmark/ais_bench/datasets/gsm8k
 ```
 
-每个 plan 分别携带 accuracy 的 `vllm_api_general_chat.py` 和 performance 的
+因此这条 CI 不依赖共享 PVC 预置或在线下载完整 GSM8K。每个 plan 分别携带 accuracy 的
+`vllm_api_general_chat.py` 和 performance 的
 `vllm_api_stream_chat.py`。evaluation 正式运行前检查命令、`-h`、模型配置可加载、数据集
 目录、endpoint 环境和 artifact 可写性。AISBench wrapper 从产物提取指标并写
 `RECIPE_STEP_RESULT_FILE`；Runner 不解析 AISBench 私有日志。
@@ -301,7 +303,8 @@ workflow 分成选择用例和执行机制两层：
   -> 所有 Runner 继续通过 HTTP coordinator 协调
   -> 每个节点把退出码写入共享 PVC，controller 收齐后删除 LWS
   -> Pod 写完退出码后保持运行，避免 CCE LWS 的容器重启策略吞掉完成状态
-  -> 从 PVC 收集 Runner artifact、Pod 日志和 Ascend plog 后上传
+  -> Actions 页面只实时跟随 node0（含 vLLM service 输出）
+  -> 从 PVC 收集所有节点的 Runner artifact、Pod 日志和 Ascend plog 后上传
 ```
 
 LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请集群实际注册的
@@ -328,8 +331,7 @@ Plugin 注入的 `ASCEND_VISIBLE_DEVICES`，再交给 plan-local launcher 使用
 Variable 或 Secret。CI 管理员只需配置真正敏感的
 `KUBECONFIG_B64` Secret。基础镜像必须包含 `/opt/vllm-ascend` 及 Mooncake runtime；recipes
 源码由 controller 暂存，不在 Pod 中联网 clone。镜像没有 AISBench 时，仅 node0 调用固定
-版本安装脚本；数据集默认使用安装目录下的
-`/opt/vllm-ascend/benchmark/ais_bench/datasets/gsm8k`。
+版本安装脚本；当前轻量 plan 的 GSM8K smoke 数据也随源码暂存。
 
 PR 使用集群 Kubeconfig 并执行 PR 中的脚本，因此只运行同仓库分支创建的 PR；fork PR 会跳过
 集群 job，避免向不受信任的 fork 暴露凭据。当前不接入 nightly 自动触发。

@@ -103,6 +103,27 @@ class PlanTests(unittest.TestCase):
             self.assertIn("$RECIPE_PLAN_DIR/aisbench", performance_script)
             self.assertIn("vllm_api_stream_chat", performance_script)
 
+    def test_lightweight_plan_carries_an_offline_gsm8k_fixture(self) -> None:
+        dataset = EXAMPLE / "aisbench/datasets/gsm8k"
+        train_rows = [
+            json.loads(line)
+            for line in (dataset / "train.jsonl").read_text().splitlines()
+        ]
+        test_rows = [
+            json.loads(line)
+            for line in (dataset / "test.jsonl").read_text().splitlines()
+        ]
+
+        self.assertGreaterEqual(len(train_rows), 1)
+        self.assertEqual(len(test_rows), 8)
+        for row in [*train_rows, *test_rows]:
+            self.assertEqual(set(row), {"question", "answer"})
+            self.assertIn("#### ", row["answer"])
+
+        for script_name in ("accuracy.sh", "performance.sh"):
+            script = (EXAMPLE / "evaluations" / script_name).read_text()
+            self.assertIn("prepare_gsm8k.sh", script)
+
     def test_hosts_must_match_plan_nodes(self) -> None:
         plan = load_plan(EXAMPLE / "plan.yaml")
         with tempfile.TemporaryDirectory() as directory:
