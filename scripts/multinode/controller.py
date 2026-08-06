@@ -318,7 +318,11 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
     npu = plan.get("npu_per_node") or args.npu_per_node
     return {
         "hostNetwork": True,
-        "restartPolicy": "Never",
+        # No pod-level restartPolicy: the CCE LWS addon (cceaddon-lws-
+        # controller-manager) creates a StatefulSet per subgroup, and K8s
+        # rejects StatefulSet pod templates with restartPolicy != "Always".
+        # Omitting it leaves the default "Always"; failed-pod diagnosis still
+        # works (CrashLoopBackOff pods are loggable).
         "affinity": {
             "nodeAffinity": {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
