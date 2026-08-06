@@ -29,6 +29,11 @@ class Model:
 
 
 @dataclass(frozen=True)
+class Resources:
+    npu_per_node: int
+
+
+@dataclass(frozen=True)
 class Readiness:
     port_start: int
     count: int = 1
@@ -69,6 +74,7 @@ class Plan:
     path: Path
     name: str
     model: Model
+    resources: Resources
     nodes: list[Node]
     gateway: Gateway | None
     checks: list[ScriptStep]
@@ -228,6 +234,7 @@ def load_plan(path: Path) -> Plan:
             "kind",
             "metadata",
             "model",
+            "resources",
             "nodes",
             "gateway",
             "checks",
@@ -244,6 +251,8 @@ def load_plan(path: Path) -> Plan:
     _check_fields(metadata, {"name"}, "metadata")
     model_raw = _mapping(raw.get("model"), "model")
     _check_fields(model_raw, {"id", "cache_path", "served_name"}, "model")
+    resources_raw = _mapping(raw.get("resources"), "resources")
+    _check_fields(resources_raw, {"npu_per_node"}, "resources")
     nodes_raw = raw.get("nodes")
     if not isinstance(nodes_raw, list) or len(nodes_raw) < 2:
         raise PlanError("nodes must contain at least two entries")
@@ -353,6 +362,11 @@ def load_plan(path: Path) -> Plan:
             ),
             served_name=_string(model_raw.get("served_name"), "model.served_name"),
         ),
+        resources=Resources(
+            npu_per_node=_positive_int(
+                resources_raw.get("npu_per_node"), "resources.npu_per_node"
+            )
+        ),
         nodes=nodes,
         gateway=gateway,
         checks=_steps(path, raw.get("checks", []), "checks"),
@@ -416,6 +430,7 @@ def format_topology_summary(
         f"Leader: {plan.leader.id}",
         f"Model: {plan.model.id}",
         f"Served name: {plan.model.served_name}",
+        f"NPUs per node: {plan.resources.npu_per_node}",
         "",
         "Nodes:",
     ]

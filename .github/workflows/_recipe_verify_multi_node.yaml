@@ -105,13 +105,15 @@ jobs:
         run: |
           set -euo pipefail
           exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/prepare.log") 2>&1
-          node_count=$(PLAN_PATH="$PLAN" PYTHONPATH=scripts/recipe_ci python3 - <<'PY'
+          read -r node_count npu_per_node < <(
+            PLAN_PATH="$PLAN" PYTHONPATH=scripts/recipe_ci python3 - <<'PY'
           import os
           from pathlib import Path
 
           from plan import load_plan
 
-          print(len(load_plan(Path(os.environ["PLAN_PATH"])).nodes))
+          plan = load_plan(Path(os.environ["PLAN_PATH"]))
+          print(len(plan.nodes), plan.resources.npu_per_node)
           PY
           )
           case "$RECIPE_CI_RUN_ROOT" in
@@ -134,6 +136,7 @@ jobs:
 
           {
             echo "RECIPE_CI_NODE_COUNT=$node_count"
+            echo "RECIPE_CI_NPU_PER_NODE=$npu_per_node"
             echo "RECIPE_CI_COMMIT=$(git rev-parse HEAD)"
           } >> "$GITHUB_ENV"
 
@@ -158,6 +161,7 @@ jobs:
               "run_root": os.environ["RECIPE_CI_RUN_ROOT"],
               "plan": os.environ["PLAN"],
               "node_count": os.environ["RECIPE_CI_NODE_COUNT"],
+              "npu_per_node": os.environ["RECIPE_CI_NPU_PER_NODE"],
               "startup_timeout_seconds": os.environ["STARTUP_TIMEOUT_SECONDS"],
               "run_timeout_seconds": os.environ["RUN_TIMEOUT_SECONDS"],
               "pvc_name": os.environ["PVC_NAME"],
@@ -309,6 +313,7 @@ jobs:
           done
 
       - name: Upload Recipe CI bundle
+        id: upload_bundle
         if: always()
         timeout-minutes: 5
         uses: actions/upload-artifact@v4
@@ -319,7 +324,7 @@ jobs:
           retention-days: 14
 
       - name: Remove staged PVC data
-        if: always() && steps.initialize.outcome == 'success'
+        if: always() && steps.upload_bundle.outcome == 'success'
         timeout-minutes: 5
         run: |
           case "$RECIPE_CI_RUN_ROOT" in

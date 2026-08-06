@@ -9,6 +9,9 @@ model:
   cache_path: vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
   served_name: dsv4
 
+resources:
+  npu_per_node: 8
+
 nodes:
   - id: node0
     role: prefill

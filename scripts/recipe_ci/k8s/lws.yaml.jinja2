@@ -11,6 +11,7 @@ spec:
     leaderTemplate:
       metadata:
         labels:
+          recipe-ci-run: {{ lws_name }}
           role: leader
       spec:
         hostNetwork: true
@@ -23,6 +24,12 @@ spec:
                     - key: node.kubernetes.io/npu.chip.name
                       operator: In
                       values: [910B4]
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    recipe-ci-run: {{ lws_name }}
+                topologyKey: kubernetes.io/hostname
         containers:
           - name: recipe-ci-leader
             image: {{ image }}
@@ -46,8 +53,6 @@ spec:
                 value: {{ run_root }}/artifacts
               - name: RECIPE_CI_PLOG_ROOT
                 value: {{ run_root }}/plogs
-              - name: RECIPE_CI_VISIBLE_DEVICES
-                value: 0,1,2,3,4,5,6,7
               - name: VLLM_ASCEND_ROOT
                 value: /opt/vllm-ascend
               - name: RECIPE_CI_IMAGE
@@ -66,14 +71,14 @@ spec:
                 value: "0"
             resources: &recipe-ci-resources
               requests:
-                huawei.com/Ascend910B: 8
-                cpu: 32
-                memory: 512Gi
-                ephemeral-storage: 100Gi
+                huawei.com/Ascend910B: {{ npu_per_node }}
+                cpu: 16
+                memory: 128Gi
+                ephemeral-storage: 20Gi
               limits:
-                huawei.com/Ascend910B: 8
-                memory: 512Gi
-                ephemeral-storage: 100Gi
+                huawei.com/Ascend910B: {{ npu_per_node }}
+                memory: 128Gi
+                ephemeral-storage: 20Gi
             securityContext: &recipe-ci-security-context
               privileged: true
             ports:
@@ -104,6 +109,10 @@ spec:
               medium: Memory
               sizeLimit: 16Gi
     workerTemplate:
+      metadata:
+        labels:
+          recipe-ci-run: {{ lws_name }}
+          role: worker
       spec:
         hostNetwork: true
         terminationGracePeriodSeconds: 120

@@ -9,6 +9,9 @@ model:
   cache_path: Eco-Tech/Qwen3.5-27B-w8a8-mtp
   served_name: qwen3.5
 
+resources:
+  npu_per_node: 8
+
 nodes:
   - id: node0
     role: prefill

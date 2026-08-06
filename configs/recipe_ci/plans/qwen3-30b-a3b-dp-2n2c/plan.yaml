@@ -9,6 +9,9 @@ model:
   cache_path: Qwen/Qwen3-30B-A3B
   served_name: qwen3
 
+resources:
+  npu_per_node: 2
+
 nodes:
   - id: node0
     role: api

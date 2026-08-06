@@ -506,6 +506,7 @@ HTTPServer((sys.argv[1], int(sys.argv[2])), Handler).serve_forever()
                 "cache_path": "fake/model",
                 "served_name": "fake",
             },
+            "resources": {"npu_per_node": 1},
             "nodes": [
                 {
                     "id": "node0",

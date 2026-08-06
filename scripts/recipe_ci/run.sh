@@ -117,8 +117,12 @@ export RECIPE_CI_CLUSTER_IPS
 if command -v npu-smi >/dev/null 2>&1; then
     npu-smi info
 fi
-if [[ -z "${RECIPE_CI_VISIBLE_DEVICES:-}" && -n "${ASCEND_RT_VISIBLE_DEVICES:-}" ]]; then
-    export RECIPE_CI_VISIBLE_DEVICES=$ASCEND_RT_VISIBLE_DEVICES
+if [[ -z "${RECIPE_CI_VISIBLE_DEVICES:-}" ]]; then
+    if [[ -n "${ASCEND_RT_VISIBLE_DEVICES:-}" ]]; then
+        export RECIPE_CI_VISIBLE_DEVICES=$ASCEND_RT_VISIBLE_DEVICES
+    elif [[ -n "${ASCEND_VISIBLE_DEVICES:-}" ]]; then
+        export RECIPE_CI_VISIBLE_DEVICES=$ASCEND_VISIBLE_DEVICES
+    fi
 fi
 echo "Recipe CI node: index=$LWS_WORKER_INDEX id=$node_id ip=${cluster_ips[$LWS_WORKER_INDEX]}"
 echo "Recipe CI visible devices: ${RECIPE_CI_VISIBLE_DEVICES:-container default}"

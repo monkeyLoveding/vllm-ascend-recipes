@@ -17,7 +17,7 @@ RUN_SCRIPT = ROOT / "scripts/recipe_ci/run.sh"
 
 
 class MultiNodeWorkflowTests(unittest.TestCase):
-    def test_entry_workflow_runs_the_deepseek_plan_manually_and_on_prs(self) -> None:
+    def test_entry_workflow_runs_the_lightweight_plan_manually_and_on_prs(self) -> None:
         text = MANUAL_WORKFLOW.read_text(encoding="utf-8")
         value = yaml.load(text, Loader=yaml.BaseLoader)
 
@@ -29,7 +29,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(job["uses"], "./.github/workflows/_recipe_verify_multi_node.yaml")
         self.assertEqual(
             job["strategy"]["matrix"]["plan"],
-            ["configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml"],
+            ["configs/recipe_ci/plans/deepseek-v2-lite-pd-2n2c/plan.yaml"],
         )
         self.assertEqual(job["with"], {"plan": "${{ matrix.plan }}"})
         self.assertIn("github.event.pull_request.head.repo.full_name", job["if"])
@@ -57,7 +57,8 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn('"$RECIPE_CI_RUN_ROOT/source/"', text)
         self.assertNotIn("inputs.ref", text)
         self.assertIn("git rev-parse HEAD", text)
-        self.assertIn("len(load_plan", text)
+        self.assertIn("len(plan.nodes)", text)
+        self.assertIn("plan.resources.npu_per_node", text)
         self.assertIn("python3 -m pip install pyyaml", text)
         self.assertIn("import yaml", text)
         self.assertIn("linux-aarch64-a2b4-0", text)
@@ -93,6 +94,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
             "run_root": "/root/.cache/recipe-ci/123-1",
             "plan": "configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml",
             "node_count": "4",
+            "npu_per_node": "2",
             "startup_timeout_seconds": "3600",
             "run_timeout_seconds": "14400",
             "pvc_name": "recipe-ci-pvc",
@@ -113,9 +115,10 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertTrue(leader["command"][1].endswith("/scripts/recipe_ci/run.sh"))
         self.assertEqual(leader["env"], worker["env"])
         self.assertEqual(leader["resources"], worker["resources"])
-        self.assertEqual(leader["resources"]["requests"]["huawei.com/Ascend910B"], 8)
-        self.assertEqual(leader["resources"]["limits"]["huawei.com/Ascend910B"], 8)
-        self.assertEqual(leader["resources"]["requests"]["cpu"], 32)
+        self.assertEqual(leader["resources"]["requests"]["huawei.com/Ascend910B"], 2)
+        self.assertEqual(leader["resources"]["limits"]["huawei.com/Ascend910B"], 2)
+        self.assertEqual(leader["resources"]["requests"]["cpu"], 16)
+        self.assertEqual(leader["resources"]["requests"]["memory"], "128Gi")
         self.assertTrue(template["leaderTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(template["workerTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(leader["securityContext"]["privileged"])
@@ -124,6 +127,18 @@ class MultiNodeWorkflowTests(unittest.TestCase):
             ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
             [0]["matchExpressions"][0]["values"],
             ["910B4"],
+        )
+        anti_affinity = template["leaderTemplate"]["spec"]["affinity"][
+            "podAntiAffinity"
+        ]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+        self.assertEqual(anti_affinity["topologyKey"], "kubernetes.io/hostname")
+        self.assertEqual(
+            anti_affinity["labelSelector"]["matchLabels"]["recipe-ci-run"],
+            "recipe-deepseek-v4-123-1",
+        )
+        self.assertEqual(
+            template["workerTemplate"]["metadata"]["labels"]["recipe-ci-run"],
+            "recipe-deepseek-v4-123-1",
         )
         volumes = {
             item["name"]: item
@@ -142,7 +157,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         env = {item["name"]: item["value"] for item in leader["env"]}
         self.assertEqual(env["RECIPE_CI_NODE_COUNT"], "4")
         self.assertEqual(env["RECIPE_CI_INSTALL_AISBENCH"], "true")
-        self.assertEqual(env["RECIPE_CI_VISIBLE_DEVICES"], "0,1,2,3,4,5,6,7")
+        self.assertNotIn("RECIPE_CI_VISIBLE_DEVICES", env)
         self.assertEqual(env["VLLM_ASCEND_ROOT"], "/opt/vllm-ascend")
         self.assertNotIn("RECIPE_AISBENCH_ACCURACY_DATASET_DIR", env)
         self.assertNotIn("RECIPE_AISBENCH_PERFORMANCE_DATASET_DIR", env)
