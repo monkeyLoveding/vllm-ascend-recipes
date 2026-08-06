@@ -287,22 +287,47 @@ def check_mooncake() -> bool:
         os.environ["LD_LIBRARY_PATH"] = (h + ":"
                                          + os.environ.get("LD_LIBRARY_PATH", ""))
         log(f"mooncake candidate: {h}")
-    try:
-        from mooncake.engine import TransferEngine  # type: ignore  # noqa: F401
-        log("mooncake.engine import OK")
+
+    def _try_import() -> bool:
+        try:
+            from mooncake.engine import TransferEngine  # type: ignore  # noqa: F401
+            log("mooncake.engine import OK")
+            return True
+        except Exception as exc:
+            log(f"mooncake import failed: {exc!r}")
+            return False
+
+    if _try_import():
         return True
-    except Exception as exc:  # ImportError / OSError when the .so is missing
-        log(f"mooncake import failed: {exc!r}")
-        log(f"LD_LIBRARY_PATH={os.environ.get('LD_LIBRARY_PATH', '')}")
-        return False
+    # PR #34 pattern (scripts/recipe_ci/install_mooncake.sh): if the baked-in
+    # mooncake is broken, pip-install mooncake-transfer-engine-npu at runtime.
+    # The pod env may set PIP_INDEX_URL to a cluster cache (PR #34 does).
+    log("baked-in mooncake import failed — trying pip install "
+        "mooncake-transfer-engine-npu")
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                        "mooncake-transfer-engine-npu"], timeout=600)
+        source_ascend_env()
+        if _try_import():
+            log("mooncake installed via pip + import OK")
+            return True
+    except Exception as exc:
+        log(f"mooncake pip install failed: {exc!r}")
+    return False
 
 
 def source_ascend_env() -> None:
-    """Source the Ascend toolkit env (same as launch.sh's set_env.sh) so the
-    mooncake check (which imports mooncake.engine -> libascendcl.so) resolves
-    the Ascend runtime libs on LD_LIBRARY_PATH."""
-    for setup in ("/usr/local/Ascend/ascend-toolkit/set_env.sh",
-                  "/usr/local/Ascend/ascend-toolkit/bin/setenv.bash"):
+    """Source the Ascend toolkit env — same set as PR #34's run.sh, which is
+    the working reference for the mooncake path:
+      * /usr/local/Ascend/ascend-toolkit/set_env.sh
+      * /usr/local/Ascend/nnal/atb/set_env.sh   (ATB; its lib dirs carry
+        libascend_hal.so, which mooncake.engine needs)
+    Then also collect every Ascend lib dir holding libascend*.so so the whole
+    mooncake .so chain resolves on LD_LIBRARY_PATH."""
+    setups = ("/usr/local/Ascend/ascend-toolkit/set_env.sh",
+              "/usr/local/Ascend/nnal/atb/set_env.sh",
+              "/usr/local/Ascend/ascend-toolkit/bin/setenv.bash")
+    for setup in setups:
         if not os.path.isfile(setup):
             continue
         try:
@@ -319,7 +344,17 @@ def source_ascend_env() -> None:
                        "ASCEND_TOOLKIT_HOME", "ASCEND_OPPER_PATH"):
                 os.environ[key] = val
         log(f"sourced Ascend env from {setup}")
-        return
+    # Version-specific device lib dirs (e.g. cann-9.0.1/aarch64-linux/lib64/
+    # device/lib64) hold libascend_hal.so which set_env.sh does not add.
+    ldp = os.environ.get("LD_LIBRARY_PATH", "")
+    seen = set(ldp.split(":"))
+    for root in ("/usr/local/Ascend",):
+        for dp, _dn, fn in os.walk(root):
+            if any(f.startswith("libascend") and f.endswith(".so") for f in fn):
+                if dp not in seen:
+                    ldp = dp + ":" + ldp
+                    seen.add(dp)
+    os.environ["LD_LIBRARY_PATH"] = ldp
 
 
 # ---------------------------------------------------------------------------
