@@ -297,6 +297,31 @@ def check_mooncake() -> bool:
         return False
 
 
+def source_ascend_env() -> None:
+    """Source the Ascend toolkit env (same as launch.sh's set_env.sh) so the
+    mooncake check (which imports mooncake.engine -> libascendcl.so) resolves
+    the Ascend runtime libs on LD_LIBRARY_PATH."""
+    for setup in ("/usr/local/Ascend/ascend-toolkit/set_env.sh",
+                  "/usr/local/Ascend/ascend-toolkit/bin/setenv.bash"):
+        if not os.path.isfile(setup):
+            continue
+        try:
+            proc = subprocess.run(
+                ["bash", "-c", f"source {setup} >/dev/null 2>&1 && env"],
+                capture_output=True, text=True, timeout=60)
+        except Exception:
+            continue
+        for line in proc.stdout.splitlines():
+            if "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            if key in ("LD_LIBRARY_PATH", "PYTHONPATH", "PATH", "ASCEND_HOME_PATH",
+                       "ASCEND_TOOLKIT_HOME", "ASCEND_OPPER_PATH"):
+                os.environ[key] = val
+        log(f"sourced Ascend env from {setup}")
+        return
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -330,12 +355,14 @@ def main() -> int:
     if not template:
         log(f"no role template for {role}")
         return 1
-    if "Mooncake" in template and not check_mooncake():
-        log("role template uses a Mooncake KV connector but the Mooncake runtime is "
-            "missing from this image. Build the mooncake-enabled image once via "
-            "`scripts/multinode/mooncake/build.sh` and pass its tag as the workflow "
-            "`image` input.")
-        return 2
+    if "Mooncake" in template:
+        source_ascend_env()  # libascendcl.so must be on LD_LIBRARY_PATH first
+        if not check_mooncake():
+            log("role template uses a Mooncake KV connector but the Mooncake runtime is "
+                "missing from this image. Build the mooncake-enabled image once via "
+                "`scripts/multinode/mooncake/build.sh` and pass its tag as the workflow "
+                "`image` input.")
+            return 2
     script = render_role_script(role, template, own_ip, nic, group_offset,
                                 plan.get("model_cache_path") or "")
     with open(os.path.join(node_dir, "run_dp_template.sh"), "w", encoding="utf-8") as f:
