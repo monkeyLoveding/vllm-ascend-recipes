@@ -393,11 +393,13 @@ def main() -> int:
     if "Mooncake" in template:
         source_ascend_env()  # libascendcl.so must be on LD_LIBRARY_PATH first
         if not check_mooncake():
-            log("role template uses a Mooncake KV connector but the Mooncake runtime is "
-                "missing from this image. Build the mooncake-enabled image once via "
-                "`scripts/multinode/mooncake/build.sh` and pass its tag as the workflow "
-                "`image` input.")
-            return 2
+            # Non-fatal, matching PR #34's run.sh: it sets LD_LIBRARY_PATH and
+            # lets vllm serve import mooncake at startup (vllm initialises the
+            # runtime itself and can succeed where a bare `import
+            # mooncake.engine` here fails on the .so chain). Fail-fast only
+            # blocked ever reaching the real test.
+            log("WARNING mooncake check failed, but continuing — vllm serve "
+                "will report whether the runtime is actually usable")
     script = render_role_script(role, template, own_ip, nic, group_offset,
                                 plan.get("model_cache_path") or "")
     with open(os.path.join(node_dir, "run_dp_template.sh"), "w", encoding="utf-8") as f:
