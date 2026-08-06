@@ -131,8 +131,8 @@ def own_ip_fallback() -> str:
 def resolve_nic(ip: str) -> str:
     """Find the NIC that has ``ip`` assigned, via ``ip -o -4 addr`` (the recipe's
     ``nic_name`` must match the NIC carrying the node's HCCL/IP — this is what a
-    user would look up with ``ip a``). Fall back to the default-route NIC, then
-    ``eth0``."""
+    user would look up with ``ip a``). Fall back to the default-route NIC (via
+    ``ip`` if present, else /proc/net/route), then ``eth0``."""
     try:
         out = subprocess.check_output(["ip", "-o", "-4", "addr", "show"], text=True)
         for line in out.splitlines():
@@ -149,6 +149,16 @@ def resolve_nic(ip: str) -> str:
         ).strip()
         if out:
             return out
+    except Exception:
+        pass
+    # No `ip` binary in this image: read the default route's interface from
+    # /proc/net/route (Iface Destination ... — default route has 00000000).
+    try:
+        with open("/proc/net/route") as f:
+            for line in f.readlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == "00000000":
+                    return parts[0]
     except Exception:
         pass
     return "eth0"
@@ -245,9 +255,25 @@ def check_mooncake() -> bool:
     the image (see scripts/multinode/mooncake/); if it is missing, fail fast
     with actionable guidance instead of letting vllm serve crash 30min later."""
     import glob
-    hits = glob.glob("/usr/local/lib*/python*/site-packages/mooncake")
-    if hits:
-        os.environ["LD_LIBRARY_PATH"] = (hits[0] + ":"
+    import sys
+    # The real install (v0.23.0rc1) lives under
+    # /usr/local/python3.12.13/lib/python3.12/site-packages/mooncake, which a
+    # /usr/local/lib*/... glob misses — search the common layouts, add the
+    # package dir to sys.path and its .so dir to LD_LIBRARY_PATH.
+    patterns = [
+        "/usr/local/lib*/python*/site-packages/mooncake",
+        "/usr/local/python*/lib/python*/site-packages/mooncake",
+        "/usr/lib/python*/site-packages/mooncake",
+        "/usr/local/lib*/python*/dist-packages/mooncake",
+    ]
+    hits: list[str] = []
+    for pat in patterns:
+        hits.extend(glob.glob(pat))
+    for h in hits:
+        parent = os.path.dirname(h)
+        if parent not in sys.path:
+            sys.path.insert(0, parent)
+        os.environ["LD_LIBRARY_PATH"] = (h + ":"
                                          + os.environ.get("LD_LIBRARY_PATH", ""))
     try:
         from mooncake.engine import TransferEngine  # type: ignore  # noqa: F401
