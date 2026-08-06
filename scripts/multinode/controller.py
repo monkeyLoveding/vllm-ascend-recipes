@@ -359,11 +359,12 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
                 {"name": "MULTINODE_WORKDIR", "value": "/run/recipe-ci"},
                 {"name": "MULTINODE_PLAN", "value": "/scripts/plan.json"},
                 {"name": "RUN_ID", "value": args.run_id},
-                # Model weights are pre-downloaded into the ModelScope cache
-                # (/root/.cache/modelscope/...). Without this flag vllm passes the
-                # absolute cache path to huggingface_hub, which rejects it as a
-                # repo id (HFValidationError). PR #34 sets the same env.
-                {"name": "VLLM_USE_MODELSCOPE", "value": "True"},
+                # NOTE: VLLM_USE_MODELSCOPE must NOT be set here. With it, vllm
+                # passes the model path to modelscope's snapshot_download, which
+                # treats the absolute path as a REMOTE model id and 404s. The
+                # weights are pre-downloaded as a plain local dir under
+                # /root/.cache/modelscope/hub/models/Eco-Tech/<model>, which vllm
+                # loads directly without the flag.
                 # Mooncake runtime .so lives under site-packages/mooncake; the
                 # mooncake-enabled image bakes this via ENV too, this is insurance.
                 {"name": "LD_LIBRARY_PATH",
