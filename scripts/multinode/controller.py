@@ -323,17 +323,24 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
         # rejects StatefulSet pod templates with restartPolicy != "Always".
         # Omitting it leaves the default "Always"; failed-pod diagnosis still
         # works (CrashLoopBackOff pods are loggable).
+        # SOFT affinity for the NPU chip: the pod already requests
+        # huawei.com/Ascend910B, which is what actually pins it to NPU-capable
+        # nodes. A *required* nodeAffinity on the chip label used to block
+        # scheduling entirely when nodes didn't carry node.kubernetes.io/
+        # npu.chip.name={args.chip}; as a preference it still favors the target
+        # chip but lets the pod land on any Ascend910B node when needed.
         "affinity": {
             "nodeAffinity": {
-                "requiredDuringSchedulingIgnoredDuringExecution": {
-                    "nodeSelectorTerms": [{
+                "preferredDuringSchedulingIgnoredDuringExecution": [{
+                    "weight": 100,
+                    "preference": {
                         "matchExpressions": [{
                             "key": "node.kubernetes.io/npu.chip.name",
                             "operator": "In",
                             "values": [args.chip],
                         }]
-                    }]
-                }
+                    },
+                }]
             }
         },
         "containers": [{
