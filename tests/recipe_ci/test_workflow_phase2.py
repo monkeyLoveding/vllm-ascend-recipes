@@ -115,17 +115,17 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertTrue(leader["command"][1].endswith("/scripts/recipe_ci/run.sh"))
         self.assertEqual(leader["env"], worker["env"])
         self.assertEqual(leader["resources"], worker["resources"])
-        self.assertEqual(leader["resources"]["requests"]["huawei.com/Ascend910B"], 2)
-        self.assertEqual(leader["resources"]["limits"]["huawei.com/Ascend910B"], 2)
-        self.assertEqual(leader["resources"]["requests"]["cpu"], 16)
+        self.assertEqual(leader["resources"]["requests"]["huawei.com/ascend-1980"], 2)
+        self.assertEqual(leader["resources"]["limits"]["huawei.com/ascend-1980"], 2)
+        self.assertEqual(leader["resources"]["requests"]["cpu"], 8)
         self.assertEqual(leader["resources"]["requests"]["memory"], "128Gi")
         self.assertTrue(template["leaderTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(template["workerTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(leader["securityContext"]["privileged"])
         self.assertEqual(
             template["leaderTemplate"]["spec"]["affinity"]["nodeAffinity"]
-            ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
-            [0]["matchExpressions"][0]["values"],
+            ["preferredDuringSchedulingIgnoredDuringExecution"][0]["preference"]
+            ["matchExpressions"][0]["values"],
             ["910B4"],
         )
         anti_affinity = template["leaderTemplate"]["spec"]["affinity"][

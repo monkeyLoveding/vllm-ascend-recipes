@@ -300,9 +300,10 @@ workflow 分成选择用例和执行机制两层：
   -> 从 PVC 收集 Runner artifact、Pod 日志和 Ascend plog 后上传
 ```
 
-LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请
-`huawei.com/Ascend910B`，并通过 `node.kubernetes.io/npu.chip.name=910B4` 调度到 A2
-节点。相同 run 的 Pod 通过 hostname 反亲和强制分散到不同物理机。Pod 使用同一份
+LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请集群实际注册的
+`huawei.com/ascend-1980`。`node.kubernetes.io/npu.chip.name=910B4` 只作为优先条件，避免
+部分 NPU 节点缺少该标签时完全无法调度。相同 run 的 Pod 通过 hostname 反亲和强制分散到
+不同物理机。Pod 使用同一份
 Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本读取 Device
 Plugin 注入的 `ASCEND_VISIBLE_DEVICES`，再交给 plan-local launcher 使用。

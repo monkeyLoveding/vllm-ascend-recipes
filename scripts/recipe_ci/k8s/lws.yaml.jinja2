@@ -18,9 +18,10 @@ spec:
         terminationGracePeriodSeconds: 120
         affinity: &recipe-ci-affinity
           nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
                     - key: node.kubernetes.io/npu.chip.name
                       operator: In
                       values: [910B4]
@@ -71,12 +72,12 @@ spec:
                 value: "0"
             resources: &recipe-ci-resources
               requests:
-                huawei.com/Ascend910B: {{ npu_per_node }}
-                cpu: 16
+                huawei.com/ascend-1980: {{ npu_per_node }}
+                cpu: 8
                 memory: 128Gi
                 ephemeral-storage: 20Gi
               limits:
-                huawei.com/Ascend910B: {{ npu_per_node }}
+                huawei.com/ascend-1980: {{ npu_per_node }}
                 memory: 128Gi
                 ephemeral-storage: 20Gi
             securityContext: &recipe-ci-security-context
