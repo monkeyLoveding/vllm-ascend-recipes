@@ -215,8 +215,9 @@ commit: 0da56eadb2ac85c31c2540f4f5b69af3ec5717a5
 目录已是正确 remote、commit、tracked-clean 且 `ais_bench -h` 成功时重复执行不会安装。
 版本不一致默认失败，只有显式 `--force-reinstall` 才替换。脚本尊重已有 pip 配置，不写死
 镜像源。可用 `AIS_BENCH_VENV` 安装到独立虚拟环境；这能避免本地长期环境被 AISBench
-依赖约束影响。K8s 模板沿用 vLLM Ascend nightly Dockerfile 的清华 PyPI 索引，因为
-AISBench 的 `setup_requires` 会在隔离构建环境中重新解析 `nltk` 及其依赖。
+依赖约束影响。K8s 模板使用集群 PyPI cache，且共享 PVC 会保留 `/root/.cache/pip`。
+安装脚本固定使用最后一个兼容 NumPy 1.x 的 OpenCV 版本，避免 pip 下载多个 30 MB 以上
+的 wheel 进行依赖回溯。
 
 GSM8K 数据集按 AISBench 约定放在：
 

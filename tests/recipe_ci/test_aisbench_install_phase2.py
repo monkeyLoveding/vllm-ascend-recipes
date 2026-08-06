@@ -9,11 +9,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "scripts/recipe_ci/install_aisbench.sh"
+CONSTRAINTS = ROOT / "scripts/recipe_ci/aisbench-constraints.txt"
 
 
 class AisbenchInstallerTests(unittest.TestCase):
     def test_installer_is_executable(self) -> None:
         self.assertTrue(os.access(INSTALLER, os.X_OK))
+
+    def test_opencv_is_pinned_to_the_last_numpy_1_compatible_release(self) -> None:
+        self.assertIn("--constraint", INSTALLER.read_text(encoding="utf-8"))
+        self.assertEqual(
+            CONSTRAINTS.read_text(encoding="utf-8").splitlines()[-1],
+            "opencv-python-headless==4.11.0.86",
+        )
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()

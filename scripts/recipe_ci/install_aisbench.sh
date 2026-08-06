@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 AIS_BENCH_TAG=${AIS_BENCH_TAG:-v3.1-20260609-master}
 AIS_BENCH_EXPECTED_COMMIT=${AIS_BENCH_EXPECTED_COMMIT:-0da56eadb2ac85c31c2540f4f5b69af3ec5717a5}
 AIS_BENCH_URL=${AIS_BENCH_URL:-https://github.com/AISBench/benchmark.git}
@@ -105,6 +106,7 @@ fi
 
 "$AIS_BENCH_PYTHON" -m pip install \
     --editable "$AIS_BENCH_ROOT" \
+    --constraint "$SCRIPT_DIR/aisbench-constraints.txt" \
     --requirement "$AIS_BENCH_ROOT/requirements/api.txt" \
     --requirement "$AIS_BENCH_ROOT/requirements/extra.txt"
 

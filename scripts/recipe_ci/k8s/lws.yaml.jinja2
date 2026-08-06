@@ -54,10 +54,12 @@ spec:
                 value: "true"
               - name: RECIPE_CI_INSTALL_MOONCAKE
                 value: "true"
-              # Match the vLLM Ascend nightly image build. AISBench uses
-              # setup_requires, so its isolated build must also see PyPI.
+              # Use the cluster cache for runtime installs. /root/.cache/pip is
+              # also persisted by the shared PVC for later Recipe CI runs.
               - name: PIP_INDEX_URL
-                value: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+                value: http://cache-service.nginx-pypi-cache.svc.cluster.local/pypi/simple
+              - name: PIP_TRUSTED_HOST
+                value: cache-service.nginx-pypi-cache.svc.cluster.local
               - name: RECIPE_CI_STARTUP_TIMEOUT_SECONDS
                 value: "{{ startup_timeout_seconds }}"
               - name: RECIPE_CI_RUN_TIMEOUT_SECONDS

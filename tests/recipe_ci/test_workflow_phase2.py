@@ -198,7 +198,11 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(env["RECIPE_CI_INSTALL_AISBENCH"], "true")
         self.assertEqual(
             env["PIP_INDEX_URL"],
-            "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple",
+            "http://cache-service.nginx-pypi-cache.svc.cluster.local/pypi/simple",
+        )
+        self.assertEqual(
+            env["PIP_TRUSTED_HOST"],
+            "cache-service.nginx-pypi-cache.svc.cluster.local",
         )
         self.assertNotIn("RECIPE_CI_VISIBLE_DEVICES", env)
         self.assertNotIn("VLLM_ASCEND_ROOT", env)
