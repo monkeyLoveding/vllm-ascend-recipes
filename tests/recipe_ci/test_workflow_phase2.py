@@ -76,6 +76,9 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn('for index in "${!pods[@]}"', text)
         self.assertNotIn("LEADER_POD", text)
         self.assertNotIn("WORKER_POD", text)
+        self.assertIn('kubectl logs -f "$pod"', text)
+        self.assertIn('wait "$pid"', text)
+        self.assertNotIn('| sed -u "s/^/[node${index}] /"', text)
 
         # Pod placement, addresses, and visible devices are supplied by LWS/K8s,
         # rather than duplicated as per-node GitHub runner configuration.
@@ -136,6 +139,14 @@ class MultiNodeWorkflowTests(unittest.TestCase):
             template["workerTemplate"]["spec"]["dnsPolicy"],
             "ClusterFirstWithHostNet",
         )
+        self.assertEqual(
+            template["leaderTemplate"]["spec"]["nodeSelector"],
+            {"node.kubernetes.io/npu.chip.name": "910B4"},
+        )
+        self.assertEqual(
+            template["workerTemplate"]["spec"]["nodeSelector"],
+            template["leaderTemplate"]["spec"]["nodeSelector"],
+        )
         self.assertTrue(leader["securityContext"]["privileged"])
         self.assertNotIn(
             "nodeAffinity", template["leaderTemplate"]["spec"]["affinity"]
@@ -183,7 +194,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(env["RECIPE_CI_NODE_COUNT"], "4")
         self.assertEqual(env["RECIPE_CI_INSTALL_AISBENCH"], "true")
         self.assertNotIn("RECIPE_CI_VISIBLE_DEVICES", env)
-        self.assertEqual(env["VLLM_ASCEND_ROOT"], "/opt/vllm-ascend")
+        self.assertNotIn("VLLM_ASCEND_ROOT", env)
         self.assertNotIn("RECIPE_AISBENCH_ACCURACY_DATASET_DIR", env)
         self.assertNotIn("RECIPE_AISBENCH_PERFORMANCE_DATASET_DIR", env)
         self.assertNotIn("RECIPE_CI_INTERFACE", env)

@@ -214,15 +214,15 @@ jobs:
           stop_streams() {
             for pid in "${pids[@]}"; do
               kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
             done
+            pids=()
           }
           trap stop_streams EXIT
 
           for index in "${!pods[@]}"; do
             pod=${pods[$index]}
-            kubectl logs -f "$pod" -n "$NAMESPACE" 2>&1 \
-              | sed -u "s/^/[node${index}] /" \
-              | tee "/tmp/recipe-ci-node${index}.log" &
+            kubectl logs -f "$pod" -n "$NAMESPACE" --prefix=true &
             pids+=("$!")
           done
 
@@ -235,6 +235,13 @@ jobs:
             done
             [[ "$all_finished" == true ]] && break
             sleep 5
+          done
+
+          stop_streams
+          trap - EXIT
+          for index in "${!pods[@]}"; do
+            kubectl logs "${pods[$index]}" -n "$NAMESPACE" \
+              > "/tmp/recipe-ci-node${index}.log" 2>&1 || true
           done
 
           failed=0

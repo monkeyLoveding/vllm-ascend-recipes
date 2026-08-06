@@ -106,9 +106,9 @@ Workflow 还显式设置 `RECIPE_CI_INSTALL_AISBENCH=true`；本地可以预先�
 └── vllm-ascend-recipes/  # CI checkout、挂载或本地 clone
 ```
 
-主流程从 recipes 根目录执行。`VLLM_ASCEND_ROOT` 本地默认是
-`/vllm-workspace/vllm-ascend`；A2 LWS 镜像显式设置为 `/opt/vllm-ascend`。该路径
-注入为 `RECIPE_VLLM_ASCEND_ROOT`。只有实际引用上游
+主流程从 recipes 根目录执行。`VLLM_ASCEND_ROOT` 默认是镜像中的
+`/vllm-workspace/vllm-ascend`，非标准镜像可显式覆盖。该路径注入为
+`RECIPE_VLLM_ASCEND_ROOT`。只有实际引用上游
 example 的 plan 才需要：
 
 ```text
@@ -255,7 +255,7 @@ node0 gateway: 38085
 
 ```bash
 export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
-export VLLM_ASCEND_ROOT=/opt/vllm-ascend
+export VLLM_ASCEND_ROOT=/vllm-workspace/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0
@@ -303,8 +303,9 @@ workflow 分成选择用例和执行机制两层：
 
 LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请集群实际注册的
 `huawei.com/ascend-1980`，并沿用 vLLM Ascend nightly 的 `dedicated=night` toleration。
-B1/B4 资源池由集群和 Kubeconfig 管理，不在通用 LWS 模板中硬编码芯片 nodeAffinity。
-相同 run 的 Pod 通过 hostname 反亲和强制分散到不同物理机。Pod 使用同一份
+当前 a2b4 CI 执行层通过 `node.kubernetes.io/npu.chip.name=910B4` 选择同构节点；
+该基础设施约束不进入 recipe plan。相同 run 的 Pod 通过 hostname 反亲和强制分散到
+不同物理机。Pod 使用同一份
 Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本读取 Device
 Plugin 注入的 `ASCEND_VISIBLE_DEVICES`，再交给 plan-local launcher 使用。

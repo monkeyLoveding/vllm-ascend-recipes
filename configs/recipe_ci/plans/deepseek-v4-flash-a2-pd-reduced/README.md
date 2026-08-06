@@ -23,15 +23,15 @@ export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 镜像必须保留：
 
 ```text
-/opt/vllm-ascend/examples/external_online_dp/launch_online_dp.py
-/opt/vllm-ascend/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py
+/vllm-workspace/vllm-ascend/examples/external_online_dp/launch_online_dp.py
+/vllm-workspace/vllm-ascend/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py
 ```
 
 node0 运行：
 
 ```bash
 export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
-export VLLM_ASCEND_ROOT=/opt/vllm-ascend
+export VLLM_ASCEND_ROOT=/vllm-workspace/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0

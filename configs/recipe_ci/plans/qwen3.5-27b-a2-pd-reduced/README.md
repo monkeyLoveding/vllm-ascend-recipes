@@ -25,7 +25,7 @@ node0 gateway: 38085
 
 ```bash
 export RECIPE_CI_PLAN=configs/recipe_ci/plans/qwen3.5-27b-a2-pd-reduced/plan.yaml
-export VLLM_ASCEND_ROOT=/opt/vllm-ascend
+export VLLM_ASCEND_ROOT=/vllm-workspace/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0

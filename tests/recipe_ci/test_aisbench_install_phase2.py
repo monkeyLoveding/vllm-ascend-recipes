@@ -12,6 +12,9 @@ INSTALLER = ROOT / "scripts/recipe_ci/install_aisbench.sh"
 
 
 class AisbenchInstallerTests(unittest.TestCase):
+    def test_installer_is_executable(self) -> None:
+        self.assertTrue(os.access(INSTALLER, os.X_OK))
+
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
