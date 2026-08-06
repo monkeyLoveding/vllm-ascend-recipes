@@ -91,6 +91,13 @@ jobs:
       - name: Checkout recipes
         uses: actions/checkout@v4
 
+      - name: Install controller dependencies
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/install-dependencies.log") 2>&1
+          python3 -m pip install pyyaml --quiet
+          python3 -c 'import yaml; print("PyYAML", yaml.__version__)'
+
       - name: Prepare run identity and stage source
         id: prepare
         env:
