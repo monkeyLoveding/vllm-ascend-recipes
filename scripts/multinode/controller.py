@@ -360,13 +360,17 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
             "securityContext": {"privileged": True},
             "resources": {
                 "limits": {NPU_RESOURCE: npu,
-                           "memory": "512Gi", "ephemeral-storage": "100Gi"},
+                           "memory": f"{npu * 64}Gi",
+                           "ephemeral-storage": "100Gi"},
                 # CPU request scales with NPU count (4/NPU) — a hardcoded 125
                 # (and later 8/NPU) made pods Unschedulable on 910B4 nodes that
                 # were short on free CPU; 4/NPU fits 4-card nodes (tp*dp=4).
+                # Memory also scales (64Gi/NPU): a flat 512Gi request was
+                # Unschedulable on nodes that don't have 512Gi free.
                 "requests": {NPU_RESOURCE: npu,
                              "cpu": str(npu * 4),
-                             "memory": "512Gi", "ephemeral-storage": "100Gi"},
+                             "memory": f"{npu * 64}Gi",
+                             "ephemeral-storage": "100Gi"},
             },
             "volumeMounts": _volume_mounts(npu),
         }],
