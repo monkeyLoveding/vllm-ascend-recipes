@@ -222,7 +222,10 @@ jobs:
 
           for index in "${!pods[@]}"; do
             pod=${pods[$index]}
-            kubectl logs -f "$pod" -n "$NAMESPACE" --prefix=true &
+            # Keep kubectl as the tracked background process while presenting a
+            # compact node label instead of its full pod/container prefix.
+            kubectl logs -f "$pod" -n "$NAMESPACE" \
+              > >(sed -u "s/^/[node${index}] /") 2>&1 &
             pids+=("$!")
           done
 

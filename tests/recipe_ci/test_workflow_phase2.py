@@ -77,6 +77,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertNotIn("LEADER_POD", text)
         self.assertNotIn("WORKER_POD", text)
         self.assertIn('kubectl logs -f "$pod"', text)
+        self.assertIn('> >(sed -u "s/^/[node${index}] /") 2>&1 &', text)
         self.assertIn('wait "$pid"', text)
         self.assertNotIn('| sed -u "s/^/[node${index}] /"', text)
 
