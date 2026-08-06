@@ -215,7 +215,8 @@ commit: 0da56eadb2ac85c31c2540f4f5b69af3ec5717a5
 目录已是正确 remote、commit、tracked-clean 且 `ais_bench -h` 成功时重复执行不会安装。
 版本不一致默认失败，只有显式 `--force-reinstall` 才替换。脚本尊重已有 pip 配置，不写死
 镜像源。可用 `AIS_BENCH_VENV` 安装到独立虚拟环境；这能避免本地长期环境被 AISBench
-依赖约束影响，而 nightly CI 仍可沿用其干净镜像中的系统 Python 安装方式。
+依赖约束影响。K8s 模板沿用 vLLM Ascend nightly Dockerfile 的清华 PyPI 索引，因为
+AISBench 的 `setup_requires` 会在隔离构建环境中重新解析 `nltk` 及其依赖。
 
 GSM8K 数据集按 AISBench 约定放在：
 

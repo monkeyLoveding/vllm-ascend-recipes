@@ -193,6 +193,10 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         env = {item["name"]: item["value"] for item in leader["env"]}
         self.assertEqual(env["RECIPE_CI_NODE_COUNT"], "4")
         self.assertEqual(env["RECIPE_CI_INSTALL_AISBENCH"], "true")
+        self.assertEqual(
+            env["PIP_INDEX_URL"],
+            "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple",
+        )
         self.assertNotIn("RECIPE_CI_VISIBLE_DEVICES", env)
         self.assertNotIn("VLLM_ASCEND_ROOT", env)
         self.assertNotIn("RECIPE_AISBENCH_ACCURACY_DATASET_DIR", env)

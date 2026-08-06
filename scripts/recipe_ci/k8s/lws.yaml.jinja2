@@ -54,6 +54,10 @@ spec:
                 value: "true"
               - name: RECIPE_CI_INSTALL_MOONCAKE
                 value: "true"
+              # Match the vLLM Ascend nightly image build. AISBench uses
+              # setup_requires, so its isolated build must also see PyPI.
+              - name: PIP_INDEX_URL
+                value: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
               - name: RECIPE_CI_STARTUP_TIMEOUT_SECONDS
                 value: "{{ startup_timeout_seconds }}"
               - name: RECIPE_CI_RUN_TIMEOUT_SECONDS
