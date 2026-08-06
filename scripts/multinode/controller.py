@@ -51,7 +51,7 @@ DEFAULT_IMAGE = "swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-
 # (get nodes / create namespace) are used anywhere in the controller.
 DEFAULT_NAMESPACE = "vllm-ascend-vllm-ascend-recipes"
 DEFAULT_CHIP = "910B4"
-NPU_RESOURCE = "huawei.com/Ascend910B"
+NPU_RESOURCE = "huawei.com/ascend-1980"  # the cluster's actual Ascend NPU resource name
 
 
 class PipelineError(RuntimeError):
@@ -324,11 +324,11 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
         # Omitting it leaves the default "Always"; failed-pod diagnosis still
         # works (CrashLoopBackOff pods are loggable).
         # SOFT affinity for the NPU chip: the pod already requests
-        # huawei.com/Ascend910B, which is what actually pins it to NPU-capable
-        # nodes. A *required* nodeAffinity on the chip label used to block
-        # scheduling entirely when nodes didn't carry node.kubernetes.io/
-        # npu.chip.name={args.chip}; as a preference it still favors the target
-        # chip but lets the pod land on any Ascend910B node when needed.
+        # NPU_RESOURCE (huawei.com/ascend-1980), which is what actually pins it
+        # to NPU-capable nodes. A *required* nodeAffinity on the chip label
+        # used to block scheduling entirely when nodes didn't carry
+        # node.kubernetes.io/npu.chip.name={args.chip}; as a preference it
+        # still favors the target chip but lets the pod land on any NPU node.
         "affinity": {
             "nodeAffinity": {
                 "preferredDuringSchedulingIgnoredDuringExecution": [{
@@ -802,7 +802,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--decode-nodes", type=int, default=0,
                    help="Decode node count (0 = auto-derive from recipe DP config)")
     p.add_argument("--npu-per-node", type=int, default=0,
-                   help="Ascend910B cards per pod (0 = auto-derive = "
+                   help="Ascend NPU cards per pod (0 = auto-derive = "
                         "dp-size-local × tp-size; also forces 1 pod/node)")
     p.add_argument("--image", default=DEFAULT_IMAGE)
     p.add_argument("--namespace", default=DEFAULT_NAMESPACE)
