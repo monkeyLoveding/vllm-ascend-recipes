@@ -97,9 +97,17 @@ def peer_dns_candidates(lws: str, ns: str, idx: int) -> list[str]:
     return candidates
 
 
-def resolve_peer_ips(lws: str, ns: str, size: int) -> list[str]:
+def resolve_peer_ips(lws: str, ns: str, size: int, local_idx: int = -1) -> list[str]:
     ips = []
     for i in range(size):
+        if i == local_idx:
+            # Own pod: hostNetwork means pod IP == node IP — take it locally via
+            # `hostname -I` instead of DNS. The headless-service DNS for the
+            # pod's own name can lag (the pod isn't in the endpoints until it's
+            # Ready), and resolving itself over DNS deadlocked the leader in a
+            # CrashLoop (never Ready -> never published -> never resolvable).
+            ips.append(own_ip_fallback())
+            continue
         ip = None
         for dns in peer_dns_candidates(lws, ns, i):
             ip = resolve_ip(dns)
@@ -269,7 +277,7 @@ def main() -> int:
 
     log(f"index={idx} size={size} role={role} group_offset={group_offset}")
 
-    peer_ips = resolve_peer_ips(lws, ns, size)
+    peer_ips = resolve_peer_ips(lws, ns, size, local_idx=idx)
     own_ip = peer_ips[idx] if idx < len(peer_ips) else own_ip_fallback()
     nic = resolve_nic(own_ip)
     log(f"own_ip={own_ip} nic={nic} peers={peer_ips}")
