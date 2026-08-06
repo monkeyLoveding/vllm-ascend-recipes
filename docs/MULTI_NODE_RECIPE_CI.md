@@ -93,7 +93,8 @@ ASCEND_RT_VISIBLE_DEVICES  当前机器的可用卡
 
 LWS 自动注入 `LWS_WORKER_INDEX` 和 `LWS_LEADER_ADDRESS`；Device Plugin 注入实际分配的
 NPU 列表。`run.sh` 在未提供
-`RECIPE_CI_CLUSTER_IPS` 时通过 LWS DNS 生成相同的 IP 列表。
+`RECIPE_CI_CLUSTER_IPS` 时等待所有 LWS Pod 注册 DNS，再生成相同的 IP 列表，避免
+leader 先于 worker 调度完成时提前退出。
 Workflow 还显式设置 `RECIPE_CI_INSTALL_AISBENCH=true`；本地可以预先执行
 `install_aisbench.sh` 或按需设置该变量。Runner 不再接受外部 evaluation 选择，plan 中
 声明的 accuracy 和 performance 步骤都会按顺序执行。

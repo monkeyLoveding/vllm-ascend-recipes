@@ -63,13 +63,15 @@ hosts_file="/tmp/recipe-ci-hosts-${LWS_WORKER_INDEX}.yaml"
 resolve_ipv4() {
     local dns=$1
     local address=""
-    for _ in $(seq 1 240); do
-        address=$(getent ahostsv4 "$dns" | awk 'NR == 1 {print $1}')
+    local deadline=$((SECONDS + ${RECIPE_CI_STARTUP_TIMEOUT_SECONDS:-300}))
+    echo "Waiting for cluster DNS: $dns" >&2
+    while ((SECONDS < deadline)); do
+        address=$(getent ahostsv4 "$dns" 2>/dev/null | awk 'NR == 1 {print $1}' || true)
         if [[ -n "$address" ]]; then
             printf '%s\n' "$address"
             return 0
         fi
-        sleep 0.5
+        sleep 1
     done
     echo "Unable to resolve cluster DNS: $dns" >&2
     return 1
