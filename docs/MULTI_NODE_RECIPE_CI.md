@@ -32,6 +32,8 @@ scripts/recipe_ci/
 ```
 
 - `plan.yaml` 只串联节点脚本、readiness、gateway、check 和 evaluation。
+- `model.cache_path` 保存模型缓存根目录下的相对路径；Runner 将它与固定根目录
+  `/root/.cache/modelscope/hub/models` 拼接，不从 Workflow 接收模型绝对路径。
 - `run.sh` 根据 `RECIPE_CI_CLUSTER_IPS` 或 LWS DNS 生成临时 `hosts.yaml`；真实地址不进入
   plan 或仓库。
 - 节点严格按顺序命名为 `node0...nodeN`，`role` 只用于描述和环境变量。`node0` 是控制
@@ -75,7 +77,6 @@ RECIPE_CI_VALIDATE_ONLY=true scripts/recipe_ci/run.sh
 
 ```text
 RECIPE_CI_PLAN          plan.yaml 路径
-RECIPE_CI_MODEL_PATH    容器内模型路径
 LWS_WORKER_INDEX        当前节点序号，0...N
 ```
 
@@ -87,12 +88,12 @@ RECIPE_CI_INTERFACE     当前机器用于节点通信的网卡（可选）
 ASCEND_RT_VISIBLE_DEVICES  当前机器的可用卡
 ```
 
-LWS 自动注入 `LWS_WORKER_INDEX` 和 `LWS_LEADER_ADDRESS`；Workflow 注入 plan、
-模型、可见逻辑设备等其余输入。`run.sh` 在未提供
+LWS 自动注入 `LWS_WORKER_INDEX` 和 `LWS_LEADER_ADDRESS`；Workflow 注入 plan 和
+可见逻辑设备等其余输入。`run.sh` 在未提供
 `RECIPE_CI_CLUSTER_IPS` 时通过 LWS DNS 生成相同的 IP 列表。
 Workflow 还显式设置 `RECIPE_CI_INSTALL_AISBENCH=true`；本地可以预先执行
-`install_aisbench.sh` 或按需设置该变量。普通自定义 evaluation 不会被入口脚本
-自动当作 AISBench。
+`install_aisbench.sh` 或按需设置该变量。Runner 不再接受外部 evaluation 选择，plan 中
+声明的 accuracy 和 performance 步骤都会按顺序执行。
 
 本地镜像中可将 recipes 仓库与 vLLM Ascend 源码放在同级目录：
 
@@ -251,13 +252,11 @@ node0 gateway: 38085
 
 ```bash
 export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
-export RECIPE_CI_MODEL_PATH=/root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
 export VLLM_ASCEND_ROOT=/opt/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
 export LWS_WORKER_INDEX=0
 export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-export RECIPE_CI_EVALUATION=none
 scripts/recipe_ci/run.sh
 ```
 
@@ -266,13 +265,20 @@ scripts/recipe_ci/run.sh
 `run.sh` 从 `LWS_LEADER_ADDRESS` 解析所有 Pod IP。其余 NPU 检查、临时 hosts、AISBench、
 artifact/plog、信号和 Runner 生命周期完全相同。
 
-## 手动 GitHub Actions workflow
+## Qwen3.5-27B 双节点 A2 缩减用例
+
+`configs/recipe_ci/plans/qwen3.5-27b-a2-pd-reduced/` 参考官方 Qwen3.5-27B
+多节点 P/D 方案。官方 A3 拓扑为每节点 `DP8 x TP2 = 16 NPU`；当前用例保持 TP2，按
+A2 每节点 8 卡缩减为 `DP4 x TP2`。它尚未加入 PR 矩阵，需先确认共享 PVC 中存在
+`Eco-Tech/Qwen3.5-27B-w8a8-mtp` 并完成真实双节点验证。
+
+## Pull request 与手动 GitHub Actions workflow
 
 workflow 分成选择用例和执行机制两层：
 
-- `.github/workflows/recipe_verify_multi_node.yaml` 只提供 `workflow_dispatch` 输入并调用
-  reusable workflow；当前默认选择 DeepSeek V4 双节点 plan，但 `plan` 是普通字符串，
-  后续可以直接传入其他双节点或多节点 plan。
+- `.github/workflows/recipe_verify_multi_node.yaml` 同时响应 `pull_request` 和
+  `workflow_dispatch`，矩阵中只保存需要验证的 plan 路径。当前矩阵只有
+  `configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml`；新增用例只需追加一行。
 - `.github/workflows/_recipe_verify_multi_node.yaml` 是 `workflow_call` 执行层，负责解析
   `plan.nodes` 数量、创建和管理 LWS，不包含 DeepSeek、P/D 或固定双节点语义。
 
@@ -297,22 +303,24 @@ Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本默认把容器可见
 设备表示为逻辑编号 `0..7`，交给 plan-local launcher 使用。
 
-CI 管理员需要配置：
+当前测试集群的 controller runner、并发资源组、namespace、PVC 名称、镜像以及启动和运行
+超时都固定在 reusable workflow 中，不要求额外创建 GitHub Repository Variables。模型来自
+挂载到 `/root/.cache` 的 PVC。Runner 按下面的规则获得路径：
 
 ```text
-Variable: RECIPE_CI_K8S_CONTROLLER_RUNNER   # 可选，默认 linux-aarch64-a2b4-0
-Variable: RECIPE_CI_RESOURCE_GROUP          # 可选，并发锁对应的 A2 资源组
-Variable: RECIPE_CI_PVC_NAME                # 可选，默认 vllm-ascend-vllm-ascend-recipes-gy001
-Variable: RECIPE_CI_AISBENCH_DATASET_DIR    # 可选，共享卷内数据集路径
-Secret:   KUBECONFIG_B64
-Secret:   RECIPE_CI_MODEL_PATH
+/root/.cache/modelscope/hub/models + plan.model.cache_path
 ```
 
-`RECIPE_CI_MODEL_PATH` 必须是所有 Pod 均可见的路径，通常位于已挂载的共享 PVC。基础镜像
-必须包含 `/opt/vllm-ascend` 及 Mooncake runtime；recipes 源码由 controller 暂存，不在 Pod 中联网
-clone。`evaluation != none` 且镜像没有 AISBench 时，仅 node0 调用固定版本安装脚本。
+例如当前 plan 的 `model.cache_path` 是
+`vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp`。模型路径不是凭据，因此不使用 Workflow input、
+Variable 或 Secret。CI 管理员只需配置真正敏感的
+`KUBECONFIG_B64` Secret。基础镜像必须包含 `/opt/vllm-ascend` 及 Mooncake runtime；recipes
+源码由 controller 暂存，不在 Pod 中联网 clone。镜像没有 AISBench 时，仅 node0 调用固定
+版本安装脚本；数据集默认使用安装目录下的
+`/opt/vllm-ascend/benchmark/ais_bench/datasets/gsm8k`。
 
-在真实 runner、secret 和容器取消语义验证稳定之前，不接入 PR 或 nightly 自动触发。
+PR 使用集群 Kubeconfig 并执行 PR 中的脚本，因此只运行同仓库分支创建的 PR；fork PR 会跳过
+集群 job，避免向不受信任的 fork 暴露凭据。当前不接入 nightly 自动触发。
 
 ## 当前不做
 
@@ -321,5 +329,5 @@ clone。`evaluation != none` 且镜像没有 AISBench 时，仅 node0 调用固�
 - Runner 自动推导 P/D、DP rank、KV Connector 或 gateway backend；
 - 复制 vLLM Ascend examples 或维护 AISBench fork；
 - 三节点、四节点 fixture 和真实回归；
-- PR/nightly 自动多节点触发；
+- nightly 自动多节点触发；
 - 自动下载大型模型和完整数据集。

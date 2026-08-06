@@ -58,6 +58,7 @@ from scripts.recipe_ci.result import (  # noqa: E402
 
 
 DEFAULT_VLLM_ASCEND_ROOT = Path("/vllm-workspace/vllm-ascend")
+MODEL_CACHE_ROOT = Path("/root/.cache/modelscope/hub/models")
 DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -78,16 +79,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--hosts", type=Path)
     parser.add_argument("--node-id")
-    parser.add_argument("--model-path")
     parser.add_argument("--vllm-ascend-root", type=Path)
     parser.add_argument("--control-port", type=int, default=29599)
     parser.add_argument("--startup-timeout-seconds", type=int, default=1800)
     parser.add_argument("--run-timeout-seconds", type=int, default=3600)
-    parser.add_argument(
-        "--evaluation",
-        choices=("none", "accuracy", "performance", "all"),
-        default="none",
-    )
     parser.add_argument("--artifact-root", type=Path, default=Path("/tmp/recipe-ci"))
     parser.add_argument("--validate-only", action="store_true")
     return parser.parse_args()
@@ -415,9 +410,7 @@ def run_node(
 ) -> None:
     host = hosts[node.id]
     interface = select_interface(host)
-    model_path = (
-        args.model_path or os.environ.get("RECIPE_CI_MODEL_PATH") or plan.model.id
-    )
+    model_path = str(MODEL_CACHE_ROOT / plan.model.cache_path)
     plan_artifact_directory = (args.artifact_root / plan.name).resolve()
     artifact_directory = plan_artifact_directory / node.id
     artifact_directory.mkdir(parents=True, exist_ok=True)
@@ -569,7 +562,7 @@ def run_node(
                     check_leader_runtime,
                     cancellation,
                 )
-                if args.evaluation in ("accuracy", "all"):
+                if plan.evaluations.accuracy:
                     evaluation_results["accuracy"] = run_steps(
                         "accuracy",
                         plan.evaluations.accuracy,
@@ -580,7 +573,7 @@ def run_node(
                         check_leader_runtime,
                         cancellation,
                     )
-                if args.evaluation in ("performance", "all"):
+                if plan.evaluations.performance:
                     evaluation_results["performance"] = run_steps(
                         "performance",
                         plan.evaluations.performance,

@@ -32,7 +32,6 @@ if [[ "${RECIPE_CI_VALIDATE_ONLY:-false}" == "true" ]]; then
         --validate-only
 fi
 
-: "${RECIPE_CI_MODEL_PATH:?RECIPE_CI_MODEL_PATH is required}"
 : "${LWS_WORKER_INDEX:?LWS_WORKER_INDEX is required}"
 if [[ ! "$LWS_WORKER_INDEX" =~ ^[0-9]+$ ]]; then
     echo "LWS_WORKER_INDEX must be a non-negative integer" >&2
@@ -130,8 +129,7 @@ if [[ "${RECIPE_CI_INSTALL_MOONCAKE:-false}" == "true" ]]; then
     echo "Mooncake library path: ${mooncake_lib_dir}"
 fi
 
-evaluation=${RECIPE_CI_EVALUATION:-none}
-if [[ "${RECIPE_CI_INSTALL_AISBENCH:-false}" == "true" && "$evaluation" != "none" && "$node_id" == "node0" ]]; then
+if [[ "${RECIPE_CI_INSTALL_AISBENCH:-false}" == "true" && "$node_id" == "node0" ]]; then
     if ! command -v "${RECIPE_AISBENCH_BIN:-ais_bench}" >/dev/null 2>&1; then
         "$SCRIPT_DIR/install_aisbench.sh"
     fi
@@ -166,12 +164,10 @@ python3 "$SCRIPT_DIR/runner.py" \
     --plan "$RECIPE_CI_PLAN" \
     --hosts "$hosts_file" \
     --node-id "$node_id" \
-    --model-path "$RECIPE_CI_MODEL_PATH" \
     --vllm-ascend-root "${VLLM_ASCEND_ROOT:-/vllm-workspace/vllm-ascend}" \
     --control-port "${RECIPE_CI_CONTROL_PORT:-29599}" \
     --startup-timeout-seconds "${RECIPE_CI_STARTUP_TIMEOUT_SECONDS:-3600}" \
     --run-timeout-seconds "${RECIPE_CI_RUN_TIMEOUT_SECONDS:-14400}" \
-    --evaluation "$evaluation" \
     --artifact-root "$artifact_root" &
 runner_pid=$!
 

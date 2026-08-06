@@ -17,31 +17,26 @@ RUN_SCRIPT = ROOT / "scripts/recipe_ci/run.sh"
 
 
 class MultiNodeWorkflowTests(unittest.TestCase):
-    def test_manual_workflow_only_selects_and_calls_the_reusable_workflow(self) -> None:
+    def test_entry_workflow_runs_the_deepseek_plan_manually_and_on_prs(self) -> None:
         text = MANUAL_WORKFLOW.read_text(encoding="utf-8")
         value = yaml.load(text, Loader=yaml.BaseLoader)
 
-        self.assertEqual(set(value["on"]), {"workflow_dispatch"})
-        inputs = value["on"]["workflow_dispatch"]["inputs"]
-        self.assertEqual(
-            set(inputs),
-            {
-                "plan",
-                "image",
-                "evaluation",
-                "ref",
-                "startup_timeout_seconds",
-                "run_timeout_seconds",
-            },
-        )
+        self.assertEqual(set(value["on"]), {"pull_request", "workflow_dispatch"})
+        self.assertEqual(value["on"]["pull_request"]["branches"], ["main"])
+        self.assertEqual(value["on"]["workflow_dispatch"], "")
         self.assertEqual(set(value["jobs"]), {"recipe-ci"})
         job = value["jobs"]["recipe-ci"]
         self.assertEqual(job["uses"], "./.github/workflows/_recipe_verify_multi_node.yaml")
         self.assertEqual(
-            inputs["plan"]["default"],
-            "configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml",
+            job["strategy"]["matrix"]["plan"],
+            ["configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml"],
         )
+        self.assertEqual(job["with"], {"plan": "${{ matrix.plan }}"})
+        self.assertIn("github.event.pull_request.head.repo.full_name", job["if"])
         self.assertIn("secrets.KUBECONFIG_B64", text)
+        self.assertNotIn("model_path", text)
+        self.assertNotIn("evaluation", text)
+        self.assertNotIn("timeout_seconds", text)
         self.assertNotIn("kubectl", text)
         self.assertNotIn("LeaderWorkerSet", text)
 
@@ -52,14 +47,7 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(set(value["on"]), {"workflow_call"})
         self.assertEqual(
             set(value["on"]["workflow_call"]["inputs"]),
-            {
-                "plan",
-                "image",
-                "evaluation",
-                "ref",
-                "startup_timeout_seconds",
-                "run_timeout_seconds",
-            },
+            {"plan"},
         )
         self.assertEqual(set(value["jobs"]), {"recipe-ci"})
         self.assertIn("kubectl apply", text)
@@ -67,12 +55,17 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn("scripts/recipe_ci/k8s/lws.yaml.jinja2", text)
         self.assertNotIn("jinja2 scripts/recipe_ci", text)
         self.assertIn("$run_root/source/", text)
-        self.assertIn("inputs.ref || github.sha", text)
+        self.assertNotIn("inputs.ref", text)
         self.assertIn("git rev-parse HEAD", text)
         self.assertIn("len(load_plan", text)
         self.assertIn("linux-aarch64-a2b4-0", text)
         self.assertIn("vllm-ascend-vllm-ascend-recipes", text)
         self.assertIn("vllm-ascend-vllm-ascend-recipes-gy001", text)
+        self.assertIn("STARTUP_TIMEOUT_SECONDS: 3600", text)
+        self.assertIn("RUN_TIMEOUT_SECONDS: 14400", text)
+        self.assertNotIn("vars.RECIPE_CI_", text)
+        self.assertNotIn("RECIPE_CI_MODEL_PATH", text)
+        self.assertNotIn("RECIPE_CI_EVALUATION", text)
         self.assertNotIn("RECIPE_CI_A3_", text)
         self.assertIn("/tmp/recipe-ci-pods.txt", text)
         self.assertIn('for index in "${!pods[@]}"', text)
@@ -97,13 +90,10 @@ class MultiNodeWorkflowTests(unittest.TestCase):
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "run_root": "/root/.cache/recipe-ci/123-1",
             "plan": "configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml",
-            "model_path": "/root/.cache/models/deepseek-v4",
-            "evaluation": "none",
             "node_count": "4",
             "startup_timeout_seconds": "3600",
             "run_timeout_seconds": "14400",
             "pvc_name": "recipe-ci-pvc",
-            "aisbench_dataset_dir": "/root/.cache/datasets/gsm8k",
         }
         for name, replacement in replacements.items():
             text = re.sub(r"{{\s*" + re.escape(name) + r"\s*}}", replacement, text)
@@ -151,6 +141,8 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(env["RECIPE_CI_INSTALL_AISBENCH"], "true")
         self.assertEqual(env["RECIPE_CI_VISIBLE_DEVICES"], "0,1,2,3,4,5,6,7")
         self.assertEqual(env["VLLM_ASCEND_ROOT"], "/opt/vllm-ascend")
+        self.assertNotIn("RECIPE_AISBENCH_ACCURACY_DATASET_DIR", env)
+        self.assertNotIn("RECIPE_AISBENCH_PERFORMANCE_DATASET_DIR", env)
         self.assertNotIn("RECIPE_CI_INTERFACE", env)
 
     def test_one_run_script_accepts_local_ips_or_lws_dns(self) -> None:

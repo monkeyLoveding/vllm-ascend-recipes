@@ -32,10 +32,6 @@ spec:
             env: &recipe-ci-env
               - name: RECIPE_CI_PLAN
                 value: {{ plan }}
-              - name: RECIPE_CI_MODEL_PATH
-                value: {{ model_path }}
-              - name: RECIPE_CI_EVALUATION
-                value: {{ evaluation }}
               - name: RECIPE_CI_INSTALL_AISBENCH
                 value: "true"
               - name: RECIPE_CI_INSTALL_MOONCAKE
@@ -58,10 +54,6 @@ spec:
                 value: {{ image }}
               - name: GITHUB_SHA
                 value: {{ commit }}
-              - name: RECIPE_AISBENCH_ACCURACY_DATASET_DIR
-                value: {{ aisbench_dataset_dir }}
-              - name: RECIPE_AISBENCH_PERFORMANCE_DATASET_DIR
-                value: {{ aisbench_dataset_dir }}
               - name: VLLM_LOGGING_LEVEL
                 value: ERROR
               - name: VLLM_USE_MODELSCOPE

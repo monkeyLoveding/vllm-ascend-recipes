@@ -43,7 +43,11 @@ class StrictPlanTests(unittest.TestCase):
             "api_version": "recipe-ci/v1",
             "kind": "MultiNodePlan",
             "metadata": {"name": "phase2-plan"},
-            "model": {"id": "example/model", "served_name": "example"},
+            "model": {
+                "id": "example/model",
+                "cache_path": "example/model",
+                "served_name": "example",
+            },
             "nodes": [
                 {
                     "id": "node0",
@@ -151,6 +155,17 @@ class StrictPlanTests(unittest.TestCase):
 
         with self.assertRaisesRegex(PlanError, "at least two"):
             load_plan(self.write_plan(data))
+
+    def test_model_cache_path_is_relative(self) -> None:
+        plan = load_plan(self.write_plan())
+        self.assertEqual(plan.model.cache_path, "example/model")
+
+        for cache_path in ("/models/example", "../example"):
+            with self.subTest(cache_path=cache_path):
+                data = copy.deepcopy(self.plan_data)
+                data["model"]["cache_path"] = cache_path
+                with self.assertRaisesRegex(PlanError, r"model\.cache_path"):
+                    load_plan(self.write_plan(data))
 
     def test_duplicate_roles_are_valid(self) -> None:
         data = copy.deepcopy(self.plan_data)

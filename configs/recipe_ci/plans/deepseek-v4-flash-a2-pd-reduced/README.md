@@ -31,19 +31,17 @@ node0 运行：
 
 ```bash
 export RECIPE_CI_PLAN=configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced/plan.yaml
-export RECIPE_CI_MODEL_PATH=/root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
 export VLLM_ASCEND_ROOT=/opt/vllm-ascend
 export RECIPE_CI_CLUSTER_IPS="<node0_ip>,<node1_ip>"
 export RECIPE_CI_INTERFACE="<local_interface>"
-export RECIPE_CI_EVALUATION=none
 export LWS_WORKER_INDEX=0
 scripts/recipe_ci/run.sh
 ```
 
 node1 使用相同环境并将 `LWS_WORKER_INDEX` 改为 `1`。两个节点应使用相同仓库 commit、
-Mooncake-enabled A2 镜像、模型路径和 `RECIPE_CI_CLUSTER_IPS`。CI 基础设施参数不写入该 plan。
+Mooncake-enabled A2 镜像和 `RECIPE_CI_CLUSTER_IPS`。模型路径由固定缓存根目录
+`/root/.cache/modelscope/hub/models` 与 `plan.model.cache_path` 拼接。
 
-需要本地运行 AISBench 时，先执行 `scripts/recipe_ci/install_aisbench.sh`，或在
-node0/node1 的共同环境中设置 `RECIPE_CI_INSTALL_AISBENCH=true`，再把
-`RECIPE_CI_EVALUATION` 改为 `accuracy`、`performance` 或 `all`。只有 node0 会执行
-安装和评测。
+plan 中声明的 check、accuracy 和 performance 会全部执行。需要本地运行 AISBench 时，
+先执行 `scripts/recipe_ci/install_aisbench.sh`，或在 node0/node1 的共同环境中设置
+`RECIPE_CI_INSTALL_AISBENCH=true`；只有 node0 会执行安装和评测。

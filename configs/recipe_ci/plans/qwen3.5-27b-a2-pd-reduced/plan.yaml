@@ -2,12 +2,12 @@ api_version: recipe-ci/v1
 kind: MultiNodePlan
 
 metadata:
-  name: deepseek-v4-flash-a2-pd-reduced
+  name: qwen3.5-27b-a2-pd-reduced
 
 model:
-  id: Eco-Tech/DeepSeek-V4-Flash-w8a8-mtp
-  cache_path: vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp
-  served_name: dsv4
+  id: Eco-Tech/Qwen3.5-27B-w8a8-mtp
+  cache_path: Eco-Tech/Qwen3.5-27B-w8a8-mtp
+  served_name: qwen3.5
 
 nodes:
   - id: node0
@@ -15,14 +15,14 @@ nodes:
     launch: nodes/node0/run.sh
     readiness:
       port_start: 7100
-      count: 8
+      count: 4
 
   - id: node1
     role: decode
     launch: nodes/node1/run.sh
     readiness:
       port_start: 7100
-      count: 8
+      count: 4
 
 gateway:
   launch: gateway/run.sh

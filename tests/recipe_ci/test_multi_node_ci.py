@@ -25,6 +25,7 @@ GENERIC_DP_EXAMPLE = ROOT / "configs/recipe_ci/plans/qwen3-30b-a3b-dp-2n2c"
 DEEPSEEK_V4_EXAMPLE = (
     ROOT / "configs/recipe_ci/plans/deepseek-v4-flash-a2-pd-reduced"
 )
+QWEN35_EXAMPLE = ROOT / "configs/recipe_ci/plans/qwen3.5-27b-a2-pd-reduced"
 
 
 def free_port() -> int:
@@ -185,6 +186,10 @@ class PlanTests(unittest.TestCase):
         self.assertEqual([node.id for node in plan.nodes], ["node0", "node1"])
         self.assertEqual([node.role for node in plan.nodes], ["prefill", "decode"])
         self.assertEqual(plan.name, "deepseek-v4-flash-a2-pd-reduced")
+        self.assertEqual(
+            plan.model.cache_path,
+            "vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp",
+        )
         self.assertEqual([node.readiness.count for node in plan.nodes], [8, 8])
         for argument in ("--dp-size 8", "--tp-size 1", "--dp-size-local 8"):
             self.assertIn(argument, prefill_run)
@@ -200,9 +205,46 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(gateway.count('"$RECIPE_NODE_1_IP"'), 8)
         self.assertNotIn("RECIPE_NODE_2_IP", gateway)
 
+    def test_qwen35_plan_keeps_tp2_and_scales_dp_to_four_on_a2(self) -> None:
+        plan = load_plan(QWEN35_EXAMPLE / "plan.yaml")
+        prefill_run = (QWEN35_EXAMPLE / plan.nodes[0].launch).read_text(
+            encoding="utf-8"
+        )
+        decode_run = (QWEN35_EXAMPLE / plan.nodes[1].launch).read_text(
+            encoding="utf-8"
+        )
+        prefill_template = (
+            QWEN35_EXAMPLE / "nodes/node0/run_dp_template.sh"
+        ).read_text(encoding="utf-8")
+        decode_template = (
+            QWEN35_EXAMPLE / "nodes/node1/run_dp_template.sh"
+        ).read_text(encoding="utf-8")
+        gateway = (QWEN35_EXAMPLE / "gateway/run.sh").read_text(encoding="utf-8")
+
+        self.assertEqual([node.id for node in plan.nodes], ["node0", "node1"])
+        self.assertEqual([node.role for node in plan.nodes], ["prefill", "decode"])
+        self.assertEqual([node.readiness.count for node in plan.nodes], [4, 4])
+        self.assertEqual(
+            plan.model.cache_path,
+            "Eco-Tech/Qwen3.5-27B-w8a8-mtp",
+        )
+        for launch in (prefill_run, decode_run):
+            self.assertIn("--dp-size 4", launch)
+            self.assertIn("--tp-size 2", launch)
+            self.assertIn("--dp-size-local 4", launch)
+        self.assertIn('"kv_role": "kv_producer"', prefill_template)
+        self.assertIn('"kv_role": "kv_consumer"', decode_template)
+        for template in (prefill_template, decode_template):
+            self.assertIn('"prefill": {"dp_size": 4, "tp_size": 2}', template)
+            self.assertIn('"decode": {"dp_size": 4, "tp_size": 2}', template)
+            self.assertIn('"method":"qwen3_5_mtp"', template)
+        self.assertEqual(gateway.count('"$RECIPE_NODE_0_IP"'), 4)
+        self.assertEqual(gateway.count('"$RECIPE_NODE_1_IP"'), 4)
+        self.assertNotIn("RECIPE_NODE_2_IP", gateway)
+
 
 class LocalRunnerTests(unittest.TestCase):
-    def test_two_nodes_complete_gateway_check_and_accuracy_stage(self) -> None:
+    def test_two_nodes_run_every_check_and_evaluation_declared_by_plan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             plan_dir = Path(directory)
             control_port = free_port()
@@ -218,7 +260,6 @@ class LocalRunnerTests(unittest.TestCase):
             common_environment.update(
                 {
                     "RECIPE_CI_PLAN": str(plan_dir / "plan.yaml"),
-                    "RECIPE_CI_MODEL_PATH": "fake/model",
                     "RECIPE_CI_CLUSTER_IPS": "127.0.0.1,127.0.0.1",
                     "RECIPE_CI_INTERFACE": "lo",
                     "VLLM_ASCEND_ROOT": str(plan_dir / "vllm-ascend"),
@@ -226,7 +267,6 @@ class LocalRunnerTests(unittest.TestCase):
                     "RECIPE_CI_STARTUP_TIMEOUT_SECONDS": "20",
                     "RECIPE_CI_RUN_TIMEOUT_SECONDS": "20",
                     "RECIPE_CI_ARTIFACT_ROOT": str(artifact_root),
-                    "RECIPE_CI_EVALUATION": "accuracy",
                 }
             )
             leader_environment = common_environment | {"LWS_WORKER_INDEX": "0"}
@@ -287,6 +327,12 @@ class LocalRunnerTests(unittest.TestCase):
                     "accuracy"
                 ],
                 1.0,
+            )
+            self.assertEqual(
+                final_result["evaluations"]["performance"]["performance"][
+                    "metrics"
+                ]["request_per_second"],
+                2.0,
             )
             self.assertEqual(leader_result["status"], "passed")
             self.assertEqual(worker_result["status"], "passed")
@@ -444,12 +490,22 @@ HTTPServer((sys.argv[1], int(sys.argv[2])), Handler).serve_forever()
             "\"metrics\": {\"accuracy\": 1.0}}' > \"$RECIPE_STEP_RESULT_FILE\"\n",
             encoding="utf-8",
         )
+        (plan_dir / "evaluations/performance.sh").write_text(
+            "printf '%s\\n' '{\"status\": \"passed\", "
+            "\"type\": \"performance\", \"metrics\": "
+            "{\"request_per_second\": 2.0}}' > \"$RECIPE_STEP_RESULT_FILE\"\n",
+            encoding="utf-8",
+        )
 
         plan_data = {
             "api_version": "recipe-ci/v1",
             "kind": "MultiNodePlan",
             "metadata": {"name": "local-runner-test"},
-            "model": {"id": "fake/model", "served_name": "fake"},
+            "model": {
+                "id": "fake/model",
+                "cache_path": "fake/model",
+                "served_name": "fake",
+            },
             "nodes": [
                 {
                     "id": "node0",
@@ -475,7 +531,14 @@ HTTPServer((sys.argv[1], int(sys.argv[2])), Handler).serve_forever()
                         "script": "evaluations/accuracy.sh",
                         "timeout_seconds": 5,
                     }
-                ]
+                ],
+                "performance": [
+                    {
+                        "id": "performance",
+                        "script": "evaluations/performance.sh",
+                        "timeout_seconds": 5,
+                    }
+                ],
             },
         }
         (plan_dir / "plan.yaml").write_text(

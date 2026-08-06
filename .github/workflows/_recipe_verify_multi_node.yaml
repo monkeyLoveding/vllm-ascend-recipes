@@ -7,48 +7,26 @@ on:
         description: Intermediate plan executed by the LWS pods
         required: true
         type: string
-      image:
-        description: vLLM Ascend A2 image used by every LWS pod; Mooncake is installed at runtime
-        required: false
-        type: string
-        default: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1
-      evaluation:
-        description: Optional AISBench stage run by the plan leader
-        required: false
-        type: string
-        default: none
-      ref:
-        description: Recipes branch, tag, or commit; empty uses the caller commit
-        required: false
-        type: string
-        default: ""
-      startup_timeout_seconds:
-        description: Service and all-ready timeout
-        required: false
-        type: number
-        default: 3600
-      run_timeout_seconds:
-        description: Coordinated run timeout
-        required: false
-        type: number
-        default: 14400
     secrets:
       KUBECONFIG_B64:
-        required: true
-      RECIPE_CI_MODEL_PATH:
         required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: recipe-ci-${{ vars.RECIPE_CI_RESOURCE_GROUP || 'a2b4-k8s-multi-node' }}
+  group: recipe-ci-a2b4-k8s-multi-node
   cancel-in-progress: false
 
 jobs:
   recipe-ci:
     name: ${{ inputs.plan }}
-    runs-on: ${{ vars.RECIPE_CI_K8S_CONTROLLER_RUNNER || 'linux-aarch64-a2b4-0' }}
+    runs-on: linux-aarch64-a2b4-0
+    env:
+      IMAGE: swr.cn-southwest-2.myhuaweicloud.com/base_image/ascend-ci/vllm-ascend:v0.23.0rc1
+      STARTUP_TIMEOUT_SECONDS: 3600
+      RUN_TIMEOUT_SECONDS: 14400
+      PVC_NAME: vllm-ascend-vllm-ascend-recipes-gy001
     # Leave time for Pod scheduling, cleanup, and artifact upload around the
     # default one-hour startup plus four-hour coordinated run timeout.
     timeout-minutes: 360
@@ -73,8 +51,6 @@ jobs:
 
       - name: Checkout recipes
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
 
       - name: Prepare run identity and stage source
         id: prepare
@@ -127,17 +103,9 @@ jobs:
 
       - name: Render and launch LeaderWorkerSet
         env:
-          IMAGE: ${{ inputs.image }}
           PLAN: ${{ inputs.plan }}
-          EVALUATION: ${{ inputs.evaluation }}
-          MODEL_PATH: ${{ secrets.RECIPE_CI_MODEL_PATH }}
-          STARTUP_TIMEOUT: ${{ inputs.startup_timeout_seconds }}
-          RUN_TIMEOUT: ${{ inputs.run_timeout_seconds }}
-          PVC_NAME: ${{ vars.RECIPE_CI_PVC_NAME || 'vllm-ascend-vllm-ascend-recipes-gy001' }}
-          AISBENCH_DATASET_DIR: ${{ vars.RECIPE_CI_AISBENCH_DATASET_DIR || '/vllm-workspace/vllm-ascend/benchmark/ais_bench/datasets/gsm8k' }}
         run: |
           set -euo pipefail
-          test -n "$MODEL_PATH"
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -152,13 +120,10 @@ jobs:
               "commit": os.environ["RECIPE_CI_COMMIT"],
               "run_root": os.environ["RECIPE_CI_RUN_ROOT"],
               "plan": os.environ["PLAN"],
-              "model_path": os.environ["MODEL_PATH"],
-              "evaluation": os.environ["EVALUATION"],
               "node_count": os.environ["RECIPE_CI_NODE_COUNT"],
-              "startup_timeout_seconds": os.environ["STARTUP_TIMEOUT"],
-              "run_timeout_seconds": os.environ["RUN_TIMEOUT"],
+              "startup_timeout_seconds": os.environ["STARTUP_TIMEOUT_SECONDS"],
+              "run_timeout_seconds": os.environ["RUN_TIMEOUT_SECONDS"],
               "pvc_name": os.environ["PVC_NAME"],
-              "aisbench_dataset_dir": os.environ["AISBENCH_DATASET_DIR"],
           }
           for name, value in values.items():
               template = template.replace("{{ " + name + " }}", value)
@@ -218,7 +183,7 @@ jobs:
             pids+=("$!")
           done
 
-          deadline=$((SECONDS + ${{ inputs.startup_timeout_seconds }} + ${{ inputs.run_timeout_seconds }}))
+          deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS + RUN_TIMEOUT_SECONDS))
           while ((SECONDS < deadline)); do
             all_terminal=true
             for pod in "${pods[@]}"; do
@@ -260,7 +225,6 @@ jobs:
       - name: Build artifact bundle
         if: always()
         env:
-          IMAGE: ${{ inputs.image }}
           PLAN: ${{ inputs.plan }}
         run: |
           set -euo pipefail
