@@ -36,17 +36,48 @@ jobs:
         KUBECONFIG: /tmp/kubeconfig
         NAMESPACE: vllm-ascend-vllm-ascend-recipes
     steps:
+      - name: Initialize diagnostics
+        id: initialize
+        env:
+          PLAN: ${{ inputs.plan }}
+        run: |
+          set -euo pipefail
+          bundle=/tmp/recipe-ci-bundle
+          mkdir -p "$bundle/controller-logs" "$bundle/pod-logs"
+          exec > >(tee -a "$bundle/controller-logs/initialize.log") 2>&1
+
+          plan_name=$(basename "$(dirname "$PLAN")")
+          suffix=$(printf '%s' "$plan_name" | tr '[:upper:]_' '[:lower:]-' | cut -c1-32)
+          random_suffix=$(tr -d '-' < /proc/sys/kernel/random/uuid | cut -c1-6)
+          lws_name="recipe-${suffix}-${GITHUB_RUN_ID}-${random_suffix}"
+          lws_name=${lws_name:0:63}
+          run_root="/root/.cache/recipe-ci/$lws_name"
+
+          {
+            echo "LWS_NAME=$lws_name"
+            echo "PLAN_NAME=$plan_name"
+            echo "RECIPE_CI_BUNDLE=$bundle"
+            echo "RECIPE_CI_RUN_ROOT=$run_root"
+          } >> "$GITHUB_ENV"
+          echo "artifact_name=recipe-ci-${plan_name}-${GITHUB_RUN_ID}-${random_suffix}" >> "$GITHUB_OUTPUT"
+          echo "Initialized diagnostics for $PLAN"
+
       - name: Decode kubeconfig
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
         run: |
+          set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/decode-kubeconfig.log") 2>&1
           test -n "$KUBECONFIG_B64"
           printf '%s' "$KUBECONFIG_B64" | base64 -d > "$KUBECONFIG"
           chmod 600 "$KUBECONFIG"
 
       - name: Check cluster access
+        id: cluster_access
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/check-cluster-access.log") 2>&1
+          kubectl --kubeconfig "$KUBECONFIG" config current-context || true
           kubectl --kubeconfig "$KUBECONFIG" get pods -n "$NAMESPACE"
 
       - name: Checkout recipes
@@ -58,6 +89,7 @@ jobs:
           PLAN: ${{ inputs.plan }}
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/prepare.log") 2>&1
           node_count=$(PLAN_PATH="$PLAN" PYTHONPATH=scripts/recipe_ci python3 - <<'PY'
           import os
           from pathlib import Path
@@ -67,45 +99,35 @@ jobs:
           print(len(load_plan(Path(os.environ["PLAN_PATH"])).nodes))
           PY
           )
-          plan_name=$(basename "$(dirname "$PLAN")")
-          suffix=$(printf '%s' "$plan_name" | tr '[:upper:]_' '[:lower:]-' | cut -c1-32)
-          random_suffix=$(tr -d '-' < /proc/sys/kernel/random/uuid | cut -c1-6)
-          lws_name="recipe-${suffix}-${GITHUB_RUN_ID}-${random_suffix}"
-          lws_name=${lws_name:0:63}
-          run_root="/root/.cache/recipe-ci/$lws_name"
-
-          case "$run_root" in
+          case "$RECIPE_CI_RUN_ROOT" in
             /root/.cache/recipe-ci/recipe-*) ;;
-            *) echo "Unsafe run root: $run_root" >&2; exit 1 ;;
+            *) echo "Unsafe run root: $RECIPE_CI_RUN_ROOT" >&2; exit 1 ;;
           esac
-          rm -rf -- "$run_root"
-          mkdir -p "$run_root/source"
-          cp -a "$GITHUB_WORKSPACE"/. "$run_root/source/"
+          rm -rf -- "$RECIPE_CI_RUN_ROOT"
+          mkdir -p "$RECIPE_CI_RUN_ROOT/source"
+          cp -a "$GITHUB_WORKSPACE"/. "$RECIPE_CI_RUN_ROOT/source/"
 
           : > /tmp/recipe-ci-pods.txt
           for ((index = 0; index < node_count; index++)); do
             if [[ $index -eq 0 ]]; then
-              pod="${lws_name}-0"
+              pod="${LWS_NAME}-0"
             else
-              pod="${lws_name}-0-${index}"
+              pod="${LWS_NAME}-0-${index}"
             fi
             echo "$pod" >> /tmp/recipe-ci-pods.txt
           done
 
           {
-            echo "LWS_NAME=$lws_name"
-            echo "PLAN_NAME=$plan_name"
             echo "RECIPE_CI_NODE_COUNT=$node_count"
-            echo "RECIPE_CI_RUN_ROOT=$run_root"
             echo "RECIPE_CI_COMMIT=$(git rev-parse HEAD)"
           } >> "$GITHUB_ENV"
-          echo "artifact_name=recipe-ci-${plan_name}-${GITHUB_RUN_ID}-${random_suffix}" >> "$GITHUB_OUTPUT"
 
       - name: Render and launch LeaderWorkerSet
         env:
           PLAN: ${{ inputs.plan }}
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/render-and-launch.log") 2>&1
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -138,6 +160,7 @@ jobs:
       - name: Wait for LWS pods to start
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/wait-for-pods.log") 2>&1
           mapfile -t pods < /tmp/recipe-ci-pods.txt
           deadline=$((SECONDS + 1200))
           while ((SECONDS < deadline)); do
@@ -165,6 +188,7 @@ jobs:
       - name: Stream logs and wait for Recipe CI
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/recipe-ci.log") 2>&1
           mapfile -t pods < /tmp/recipe-ci-pods.txt
           pids=()
           # shellcheck disable=SC2329  # Invoked by the EXIT trap.
@@ -208,8 +232,10 @@ jobs:
           exit "$failed"
 
       - name: Delete LeaderWorkerSet
-        if: always()
+        if: always() && steps.prepare.outcome == 'success'
+        timeout-minutes: 6
         run: |
+          exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/delete-lws.log") 2>&1
           if [[ -f "$RECIPE_CI_RUN_ROOT/lws.yaml" ]]; then
             kubectl delete -f "$RECIPE_CI_RUN_ROOT/lws.yaml" --ignore-not-found=true || true
           fi
@@ -226,50 +252,59 @@ jobs:
         if: always()
         env:
           PLAN: ${{ inputs.plan }}
+          CLUSTER_ACCESS_OUTCOME: ${{ steps.cluster_access.outcome }}
+          PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
         run: |
           set -euo pipefail
-          bundle=/tmp/recipe-ci-bundle
-          mkdir -p "$bundle/pod-logs"
-          if [[ -d "$RECIPE_CI_RUN_ROOT/artifacts" ]]; then
-            cp -a "$RECIPE_CI_RUN_ROOT/artifacts" "$bundle/"
-          fi
-          if [[ -d "$RECIPE_CI_RUN_ROOT/plogs" ]]; then
-            cp -a "$RECIPE_CI_RUN_ROOT/plogs" "$bundle/"
-          fi
-          for ((index = 0; index < RECIPE_CI_NODE_COUNT; index++)); do
-            cp "/tmp/recipe-ci-node${index}.log" \
-              "$bundle/pod-logs/node${index}.log" 2>/dev/null || true
-          done
+          bundle=${RECIPE_CI_BUNDLE:-/tmp/recipe-ci-bundle}
+          mkdir -p "$bundle/controller-logs" "$bundle/pod-logs"
+          exec > >(tee -a "$bundle/controller-logs/build-artifact.log") 2>&1
+
           RECIPE_CI_BUNDLE="$bundle" RECIPE_CI_IMAGE="$IMAGE" RECIPE_CI_PLAN="$PLAN" \
             python3 - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          bundle = Path(os.environ["RECIPE_CI_BUNDLE"])
+          node_count = os.environ.get("RECIPE_CI_NODE_COUNT")
           metadata = {
-              "commit": os.environ["RECIPE_CI_COMMIT"],
+              "commit": os.environ.get("RECIPE_CI_COMMIT", os.environ.get("GITHUB_SHA")),
               "image": os.environ["RECIPE_CI_IMAGE"],
               "plan": os.environ["RECIPE_CI_PLAN"],
-              "node_count": int(os.environ["RECIPE_CI_NODE_COUNT"]),
-              "lws_name": os.environ["LWS_NAME"],
+              "node_count": int(node_count) if node_count else None,
+              "lws_name": os.environ.get("LWS_NAME"),
+              "cluster_access": os.environ.get("CLUSTER_ACCESS_OUTCOME"),
+              "prepare": os.environ.get("PREPARE_OUTCOME"),
           }
+          bundle = Path(os.environ["RECIPE_CI_BUNDLE"])
           (bundle / "ci-metadata.json").write_text(
               json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
           )
           PY
 
+          if [[ -n "${RECIPE_CI_RUN_ROOT:-}" && -d "$RECIPE_CI_RUN_ROOT/artifacts" ]]; then
+            cp -a "$RECIPE_CI_RUN_ROOT/artifacts" "$bundle/"
+          fi
+          if [[ -n "${RECIPE_CI_RUN_ROOT:-}" && -d "$RECIPE_CI_RUN_ROOT/plogs" ]]; then
+            cp -a "$RECIPE_CI_RUN_ROOT/plogs" "$bundle/"
+          fi
+          for ((index = 0; index < ${RECIPE_CI_NODE_COUNT:-0}; index++)); do
+            cp "/tmp/recipe-ci-node${index}.log" \
+              "$bundle/pod-logs/node${index}.log" 2>/dev/null || true
+          done
+
       - name: Upload Recipe CI bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.prepare.outputs.artifact_name }}
+          name: ${{ steps.initialize.outputs.artifact_name || format('recipe-ci-diagnostics-{0}', github.run_id) }}
           path: /tmp/recipe-ci-bundle/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
       - name: Remove staged PVC data
-        if: always()
+        if: always() && steps.initialize.outcome == 'success'
+        timeout-minutes: 5
         run: |
           case "$RECIPE_CI_RUN_ROOT" in
             /root/.cache/recipe-ci/recipe-*) rm -rf -- "$RECIPE_CI_RUN_ROOT" ;;
