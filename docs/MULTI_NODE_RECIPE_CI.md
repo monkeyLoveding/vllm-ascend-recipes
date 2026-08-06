@@ -307,6 +307,8 @@ B1/B4 资源池由集群和 Kubeconfig 管理，不在通用 LWS 模板中硬编
 Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本读取 Device
 Plugin 注入的 `ASCEND_VISIBLE_DEVICES`，再交给 plan-local launcher 使用。
+由于 Pod 使用 `hostNetwork`，模板同时设置 `dnsPolicy: ClusterFirstWithHostNet`，确保
+`LWS_LEADER_ADDRESS` 和同组 worker DNS 能通过集群 DNS 解析。
 
 当前测试集群的 controller runner、并发资源组、namespace、PVC 名称、镜像以及启动和运行
 超时都固定在 reusable workflow 中，不要求额外创建 GitHub Repository Variables。模型来自

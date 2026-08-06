@@ -121,6 +121,14 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertEqual(leader["resources"]["requests"]["memory"], "128Gi")
         self.assertTrue(template["leaderTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(template["workerTemplate"]["spec"]["hostNetwork"])
+        self.assertEqual(
+            template["leaderTemplate"]["spec"]["dnsPolicy"],
+            "ClusterFirstWithHostNet",
+        )
+        self.assertEqual(
+            template["workerTemplate"]["spec"]["dnsPolicy"],
+            "ClusterFirstWithHostNet",
+        )
         self.assertTrue(leader["securityContext"]["privileged"])
         self.assertNotIn(
             "nodeAffinity", template["leaderTemplate"]["spec"]["affinity"]

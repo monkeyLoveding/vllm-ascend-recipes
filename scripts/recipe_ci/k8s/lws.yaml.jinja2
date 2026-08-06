@@ -15,6 +15,7 @@ spec:
           role: leader
       spec:
         hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
         terminationGracePeriodSeconds: 120
         tolerations: &recipe-ci-tolerations
           - key: dedicated
@@ -113,6 +114,7 @@ spec:
           role: worker
       spec:
         hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
         terminationGracePeriodSeconds: 120
         tolerations: *recipe-ci-tolerations
         affinity: *recipe-ci-affinity
