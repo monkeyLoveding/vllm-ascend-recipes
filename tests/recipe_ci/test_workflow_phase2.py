@@ -122,11 +122,21 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertTrue(template["leaderTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(template["workerTemplate"]["spec"]["hostNetwork"])
         self.assertTrue(leader["securityContext"]["privileged"])
+        self.assertNotIn(
+            "nodeAffinity", template["leaderTemplate"]["spec"]["affinity"]
+        )
         self.assertEqual(
-            template["leaderTemplate"]["spec"]["affinity"]["nodeAffinity"]
-            ["preferredDuringSchedulingIgnoredDuringExecution"][0]["preference"]
-            ["matchExpressions"][0]["values"],
-            ["910B4"],
+            template["leaderTemplate"]["spec"]["tolerations"],
+            template["workerTemplate"]["spec"]["tolerations"],
+        )
+        self.assertEqual(
+            template["leaderTemplate"]["spec"]["tolerations"][0],
+            {
+                "key": "dedicated",
+                "operator": "Equal",
+                "value": "night",
+                "effect": "NoSchedule",
+            },
         )
         anti_affinity = template["leaderTemplate"]["spec"]["affinity"][
             "podAntiAffinity"

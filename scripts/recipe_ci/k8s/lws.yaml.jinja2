@@ -16,15 +16,12 @@ spec:
       spec:
         hostNetwork: true
         terminationGracePeriodSeconds: 120
+        tolerations: &recipe-ci-tolerations
+          - key: dedicated
+            operator: Equal
+            value: night
+            effect: NoSchedule
         affinity: &recipe-ci-affinity
-          nodeAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
-                    - key: node.kubernetes.io/npu.chip.name
-                      operator: In
-                      values: [910B4]
           podAntiAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
               - labelSelector:
@@ -117,6 +114,7 @@ spec:
       spec:
         hostNetwork: true
         terminationGracePeriodSeconds: 120
+        tolerations: *recipe-ci-tolerations
         affinity: *recipe-ci-affinity
         containers:
           - name: recipe-ci-worker

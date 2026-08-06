@@ -301,9 +301,9 @@ workflow 分成选择用例和执行机制两层：
 ```
 
 LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请集群实际注册的
-`huawei.com/ascend-1980`。`node.kubernetes.io/npu.chip.name=910B4` 只作为优先条件，避免
-部分 NPU 节点缺少该标签时完全无法调度。相同 run 的 Pod 通过 hostname 反亲和强制分散到
-不同物理机。Pod 使用同一份
+`huawei.com/ascend-1980`，并沿用 vLLM Ascend nightly 的 `dedicated=night` toleration。
+B1/B4 资源池由集群和 Kubeconfig 管理，不在通用 LWS 模板中硬编码芯片 nodeAffinity。
+相同 run 的 Pod 通过 hostname 反亲和强制分散到不同物理机。Pod 使用同一份
 Mooncake-enabled A2 镜像和 PVC 暂存源码。K8s 决定节点地址和设备分配，因此 workflow 不再保存逐节点
 runner label、物理 IP、网卡或 `ASCEND_RT_VISIBLE_DEVICES`。Pod 入口脚本读取 Device
 Plugin 注入的 `ASCEND_VISIBLE_DEVICES`，再交给 plan-local launcher 使用。
