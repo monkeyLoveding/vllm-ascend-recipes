@@ -39,7 +39,6 @@ class ManagedProcess:
     log_file: BinaryIO
     stage: str | None = None
     node_id: str | None = None
-    output_thread: threading.Thread | None = None
     started_at: str = field(default_factory=_utc_now)
     process_group: int = field(init=False)
 
@@ -81,9 +80,8 @@ def start_process(
     log_path: Path,
     stage: str | None = None,
     node_id: str | None = None,
-    mirror_output: BinaryIO | None = None,
 ) -> ManagedProcess:
-    """Start a logged command, optionally mirroring its output to another stream."""
+    """Start a logged command in a new session and process group."""
     if not command:
         raise ValueError("command must not be empty")
 
@@ -94,7 +92,7 @@ def start_process(
             list(command),
             cwd=cwd,
             env=dict(environment),
-            stdout=subprocess.PIPE if mirror_output is not None else log_file,
+            stdout=log_file,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
@@ -102,7 +100,7 @@ def start_process(
         log_file.close()
         raise
 
-    item = ManagedProcess(
+    return ManagedProcess(
         name=name,
         process=process,
         log_path=log_path,
@@ -110,30 +108,6 @@ def start_process(
         stage=stage,
         node_id=node_id,
     )
-    if mirror_output is not None:
-        assert process.stdout is not None
-
-        def copy_output() -> None:
-            mirror_is_open = True
-            while chunk := process.stdout.readline():
-                log_file.write(chunk)
-                log_file.flush()
-                if mirror_is_open:
-                    try:
-                        mirror_output.write(chunk)
-                        mirror_output.flush()
-                    except (BrokenPipeError, OSError, ValueError):
-                        # Keep draining the child into its artifact if the
-                        # interactive consumer goes away.
-                        mirror_is_open = False
-
-        item.output_thread = threading.Thread(
-            target=copy_output,
-            name=f"{name}-log",
-            daemon=True,
-        )
-        item.output_thread.start()
-    return item
 
 
 def tail_log(
@@ -351,14 +325,6 @@ def stop_processes(
         )
     finally:
         for item in reversed_processes:
-            if item.output_thread is not None:
-                item.output_thread.join(timeout=kill_timeout_seconds)
-                if item.output_thread.is_alive():
-                    cleanup_errors.append(
-                        f"log stream for {item.name} did not stop"
-                    )
-            if item.process.stdout is not None:
-                item.process.stdout.close()
             try:
                 item.log_file.close()
             except Exception as error:

@@ -303,8 +303,7 @@ workflow 分成选择用例和执行机制两层：
   -> 所有 Runner 继续通过 HTTP coordinator 协调
   -> 每个节点把退出码写入共享 PVC，controller 收齐后删除 LWS
   -> Pod 写完退出码后保持运行，避免 CCE LWS 的容器重启策略吞掉完成状态
-  -> Actions 页面只实时跟随 node0（含 vLLM service 输出）
-  -> 从 PVC 收集所有节点的 Runner artifact、Pod 日志和 Ascend plog 后上传
+  -> 从 PVC 收集 Runner artifact、Pod 日志和 Ascend plog 后上传
 ```
 
 LWS 的 leader 和每个 worker 按 `plan.resources.npu_per_node` 申请集群实际注册的

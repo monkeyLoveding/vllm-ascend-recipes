@@ -76,10 +76,9 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         self.assertIn('for index in "${!pods[@]}"', text)
         self.assertNotIn("LEADER_POD", text)
         self.assertNotIn("WORKER_POD", text)
-        self.assertIn('kubectl logs -f "${pods[0]}"', text)
-        self.assertIn("> >(sed -u 's/^/[node0] /') 2>&1 &", text)
-        self.assertNotIn('kubectl logs -f "$pod"', text)
-        self.assertIn('wait "$stream_pid"', text)
+        self.assertIn('kubectl logs -f "$pod"', text)
+        self.assertIn('> >(sed -u "s/^/[node${index}] /") 2>&1 &', text)
+        self.assertIn('wait "$pid"', text)
         self.assertIn('node_failed=true', text)
         self.assertIn('"$node_failed" == true || "$all_finished" == true', text)
         self.assertNotIn('| sed -u "s/^/[node${index}] /"', text)
@@ -128,9 +127,6 @@ class MultiNodeWorkflowTests(unittest.TestCase):
         )
         self.assertIn("exec sleep infinity", leader["command"][2])
         self.assertEqual(leader["env"], worker["env"])
-        self.assertIn(
-            {"name": "VLLM_LOGGING_LEVEL", "value": "INFO"}, leader["env"]
-        )
         self.assertEqual(leader["resources"], worker["resources"])
         self.assertEqual(leader["resources"]["requests"]["huawei.com/ascend-1980"], 2)
         self.assertEqual(leader["resources"]["limits"]["huawei.com/ascend-1980"], 2)

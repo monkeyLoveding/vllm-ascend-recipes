@@ -209,23 +209,25 @@ jobs:
           set -euo pipefail
           exec > >(tee -a "$RECIPE_CI_BUNDLE/controller-logs/recipe-ci.log") 2>&1
           mapfile -t pods < /tmp/recipe-ci-pods.txt
-          stream_pid=""
+          pids=()
           # shellcheck disable=SC2329  # Invoked by the EXIT trap.
           stop_streams() {
-            if [[ -n "$stream_pid" ]]; then
-              kill "$stream_pid" 2>/dev/null || true
-              wait "$stream_pid" 2>/dev/null || true
-              stream_pid=""
-            fi
+            for pid in "${pids[@]}"; do
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+            done
+            pids=()
           }
           trap stop_streams EXIT
 
-          # node0 mirrors its vLLM service log to Pod stdout. Keep the Actions
-          # page focused on that leader stream; all Pod and service logs are
-          # still collected in the artifact bundle below.
-          kubectl logs -f "${pods[0]}" -n "$NAMESPACE" \
-            > >(sed -u 's/^/[node0] /') 2>&1 &
-          stream_pid=$!
+          for index in "${!pods[@]}"; do
+            pod=${pods[$index]}
+            # Keep kubectl as the tracked background process while presenting a
+            # compact node label instead of its full pod/container prefix.
+            kubectl logs -f "$pod" -n "$NAMESPACE" \
+              > >(sed -u "s/^/[node${index}] /") 2>&1 &
+            pids+=("$!")
+          done
 
           deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS + RUN_TIMEOUT_SECONDS))
           while ((SECONDS < deadline)); do

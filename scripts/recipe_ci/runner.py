@@ -484,11 +484,6 @@ def run_node(
                 log_path=artifact_directory / "service.log",
                 stage="service",
                 node_id=node.id,
-                # Keep every full service log as an artifact. Only the leader
-                # also mirrors vLLM startup to the CI console.
-                mirror_output=(
-                    sys.stdout.buffer if node.id == plan.leader.id else None
-                ),
             )
             managed_processes.append(service_process)
             runtime_processes.append(service_process)
