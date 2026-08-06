@@ -545,10 +545,10 @@ scenarios:
     content: |-
       ```bash
       # p0 (Prefill 节点 0)
-      python launch_online_dp.py --dp-size 8 --tp-size 1 --dp-size-local 8 --dp-rank-start 0 \
+      python launch_online_dp.py --dp-size 4 --tp-size 1 --dp-size-local 4 --dp-rank-start 0 \
         --dp-address 141.xx.xx.1 --dp-rpc-port 12321 --vllm-start-port 7100
       # d0 (Decode 节点 0)
-      python launch_online_dp.py --dp-size 8 --tp-size 1 --dp-size-local 8 --dp-rank-start 0 \
+      python launch_online_dp.py --dp-size 4 --tp-size 1 --dp-size-local 4 --dp-rank-start 0 \
         --dp-address 141.xx.xx.2 --dp-rpc-port 12321 --vllm-start-port 7100
       ```
   - title: 在 Prefill 主节点上启动 proxy

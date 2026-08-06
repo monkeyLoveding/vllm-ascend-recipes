@@ -354,11 +354,11 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
             "resources": {
                 "limits": {NPU_RESOURCE: npu,
                            "memory": "512Gi", "ephemeral-storage": "100Gi"},
-                # CPU request scales with NPU count (8/NPU) — a hardcoded 125
-                # made pods Unschedulable on 910B4 nodes that were short on
-                # free CPU.
+                # CPU request scales with NPU count (4/NPU) — a hardcoded 125
+                # (and later 8/NPU) made pods Unschedulable on 910B4 nodes that
+                # were short on free CPU; 4/NPU fits 4-card nodes (tp*dp=4).
                 "requests": {NPU_RESOURCE: npu,
-                             "cpu": str(npu * 8),
+                             "cpu": str(npu * 4),
                              "memory": "512Gi", "ephemeral-storage": "100Gi"},
             },
             "volumeMounts": _volume_mounts(npu),
