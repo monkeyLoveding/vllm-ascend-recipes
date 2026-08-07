@@ -268,7 +268,7 @@ def _parse_launch_topology(plan: dict) -> tuple[dict, int]:
 # LWS / ConfigMap rendering
 # ---------------------------------------------------------------------------
 
-def _volumes(npu_per_node: int, entry_cm: str) -> list[dict]:
+def _volumes(npu_per_node: int, entry_cm: str, pvc_name: str = "") -> list[dict]:
     volumes = []
     for i in range(npu_per_node):
         volumes.append({"name": f"davinci{i}",
@@ -285,7 +285,15 @@ def _volumes(npu_per_node: int, entry_cm: str) -> list[dict]:
                        ("ascend-install-info", "/etc/ascend_install.info"),
                        ("hccn-conf", "/etc/hccn.conf")):
         volumes.append({"name": name, "hostPath": {"path": path}})
-    volumes.append({"name": "model-cache", "hostPath": {"path": "/root/.cache/modelscope"}})
+    # Model weights: a node-local hostPath only works if every schedulable node
+    # has them. PR #34 mounts the shared RWX cache PVC at /root/.cache — do the
+    # same (pvc_name defaults to the cluster's shared cache volume).
+    if pvc_name:
+        volumes.append({"name": "model-cache",
+                        "persistentVolumeClaim": {"claimName": pvc_name}})
+    else:
+        volumes.append({"name": "model-cache",
+                        "hostPath": {"path": "/root/.cache/modelscope"}})
     volumes.append({"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "512Gi"}})
     volumes.append({"name": "workdir", "emptyDir": {}})
     volumes.append({"name": "entry", "configMap": {"name": entry_cm}})
@@ -306,7 +314,7 @@ def _volume_mounts(npu_per_node: int) -> list[dict]:
         {"name": "driver-version", "mountPath": "/usr/local/Ascend/driver/version.info"},
         {"name": "ascend-install-info", "mountPath": "/etc/ascend_install.info"},
         {"name": "hccn-conf", "mountPath": "/etc/hccn.conf"},
-        {"name": "model-cache", "mountPath": "/root/.cache/modelscope"},
+        {"name": "model-cache", "mountPath": "/root/.cache"},
         {"name": "shm", "mountPath": "/dev/shm"},
         {"name": "workdir", "mountPath": "/run/recipe-ci"},
         {"name": "entry", "mountPath": "/scripts"},
@@ -387,7 +395,7 @@ def _pod_spec(plan: dict, args, entry_cm: str) -> dict:
             },
             "volumeMounts": _volume_mounts(npu),
         }],
-        "volumes": _volumes(npu, entry_cm),
+        "volumes": _volumes(npu, entry_cm, getattr(args, "pvc_name", "")),
     }
 
 
@@ -819,6 +827,9 @@ def parse_args() -> argparse.Namespace:
                         "dp-size-local × tp-size; also forces 1 pod/node)")
     p.add_argument("--image", default=DEFAULT_IMAGE)
     p.add_argument("--namespace", default=DEFAULT_NAMESPACE)
+    p.add_argument("--pvc-name", dest="pvc_name",
+                   default="vllm-ascend-vllm-ascend-recipes-gy001",
+                   help="Shared RWX PVC for the model cache (mounted at /root/.cache)")
     p.add_argument("--chip", default=DEFAULT_CHIP,
                    help="node.kubernetes.io/npu.chip.name affinity value")
     p.add_argument("--run-id", default=str(int(time.time())))
