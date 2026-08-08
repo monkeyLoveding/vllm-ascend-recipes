@@ -1,0 +1,278 @@
+meta:
+  title: "Qwen3.5-27B/Qwen3.6-27B"
+  slug: "qwen3.5-27b-qwen3.6-27b"
+  provider: "Qwen"
+  description: "Qwen3.5-27B and Qwen3.6-27B are dense hybrid Mamba-Transformer language models sharing the same GDN+full-attention hybrid design and MTP head. Suitable for dialogue, content creation, and code generation on Ascend NPUs."
+  title_zh: "Qwen3.5-27B/Qwen3.6-27B"
+  description_zh: "Qwen3.5-27B 和 Qwen3.6-27B 是密集混合 Mamba-Transformer 语言模型，共享相同的 GDN+全注意力混合设计和 MTP 头。适用于 Ascend NPU 上的对话、内容创作和代码生成。"
+  date_added: 2026-07-27
+  date_updated: 2026-07-27
+  difficulty: beginner
+  tasks:
+    - text
+  performance_headline: "Single-node deployment on Atlas 800 A2/A3 with TP=2 + DP-first parallelism"
+  hardware:
+    atlas_800_a3: verified
+    atlas_800_a2: verified
+
+model:
+  model_id: "Qwen/Qwen3.6-27B"
+  min_vllm_version: "0.18.0rc1"
+  architecture: dense
+  parameter_count: "27B"
+  context_length: 262144
+  base_args:
+    - "--trust-remote-code"
+    - "--no-enable-prefix-caching"
+    - "--gpu-memory-utilization"
+    - "0.90"
+  base_env:
+    PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
+    HCCL_BUFFSIZE: "512"
+    OMP_PROC_BIND: "false"
+    OMP_NUM_THREADS: "1"
+    TASK_QUEUE_ENABLE: "1"
+
+features:
+  quantization_ascend:
+    description: "Enable Ascend W8A8 quantization (remove for BF16 weights)."
+    label: "Ascend Quant"
+    args:
+      - "--quantization"
+      - "ascend"
+  mtp_spec_decoding:
+    description: "Enable MTP speculative decoding (3 tokens). Both Qwen3.5 and Qwen3.6 share the qwen3_5_mtp head."
+    label: "MTP Spec Decoding"
+    args:
+      - "--speculative-config"
+      - '{"method": "qwen3_5_mtp", "num_speculative_tokens": 3, "enforce_eager": true}'
+  async_scheduling:
+    description: "Enable asynchronous scheduling to overlap CPU scheduling with NPU computation."
+    label: "Async Scheduling"
+    args:
+      - "--async-scheduling"
+  cpu_binding:
+    description: "Enable CPU core binding for reduced NUMA latencies."
+    label: "CPU Binding"
+    args:
+      - "--additional-config"
+      - '{"enable_cpu_binding": true}'
+  flashcomm1:
+    description: "Enable FlashComm communication optimization (PD separation prefill node)."
+    label: "FlashComm1"
+    args: []
+    env:
+      VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
+
+opt_in_features:
+  - mtp_spec_decoding
+  - async_scheduling
+  - cpu_binding
+  - flashcomm1
+
+variants:
+  default:
+    precision: w8a8
+    vram_minimum_gb: 30
+    description: "W8A8 quantized weights (Qwen3.5-27B-w8a8-mtp or Qwen3.6-27B-w8a8) — recommended"
+    extra_args:
+      - "--quantization"
+      - "ascend"
+    extra_env: {}
+  bf16:
+    precision: bf16
+    vram_minimum_gb: 64
+    description: "BF16 weights (Qwen3.5-27B or Qwen3.6-27B)"
+    extra_args: []
+    extra_env: {}
+
+compatible_strategies:
+  - single_node_tp
+  - multi_node_pd_disaggregation
+
+hardware_overrides:
+  ascend_a3:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env:
+      HCCL_OP_EXPANSION_MODE: "AIV"
+      HCCL_BUFFSIZE: "1024"
+  ascend_a2:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env: {}
+
+guide: |
+  ## Overview
+
+  Qwen3.5-27B and Qwen3.6-27B are dense hybrid Mamba-Transformer language models in the Qwen3.5/Qwen3.6 family. Both share the same hybrid attention design (GDN + full attention) and the same MTP head design, so deployment on Ascend NPUs follows the same pattern for both models.
+
+  **Minimum versions:**
+  - Qwen3.5-27B: first supported in vllm-ascend v0.17.0rc1
+  - Qwen3.6-27B: first supported in vllm-ascend v0.18.0rc1
+  - Atlas inference products: supported starting v0.23.0rc1
+
+  This guide is validated against **vllm-ascend v0.23.0rc1**.
+
+  > **Note**: For Qwen3.5-27B, use `Eco-Tech/Qwen3.5-27B-w8a8-mtp` and `--served-model-name qwen3.5`. For Qwen3.6-27B, use `Eco-Tech/Qwen3.6-27B-w8a8` and `--served-model-name qwen3.6`. The commands below use Qwen3.5-27B as the example; substitute accordingly.
+
+  ## Prerequisites
+
+  - **Hardware**: 1 Atlas 800 A3 (64G × 16) or 1 Atlas 800 A2 (64G × 8)
+  - **Model weights**:
+    - Qwen3.5-27B BF16: [ModelScope](https://modelscope.cn/models/Qwen/Qwen3.5-27B) / [HuggingFace](https://huggingface.co/Qwen/Qwen3.5-27B)
+    - Qwen3.5-27B W8A8-MTP: [ModelScope](https://www.modelscope.cn/models/Eco-Tech/Qwen3.5-27B-w8a8-mtp)
+    - Qwen3.6-27B BF16: [ModelScope](https://modelscope.cn/models/Qwen/Qwen3.6-27B) / [HuggingFace](https://huggingface.co/Qwen/Qwen3.6-27B)
+    - Qwen3.6-27B W8A8: [ModelScope](https://www.modelscope.cn/models/Eco-Tech/Qwen3.6-27B-w8a8)
+
+  ### Environment Setup
+
+  **Docker (recommended):**
+  ```bash
+  # Atlas 800 A3
+  export IMAGE=m.daocloud.io/quay.io/ascend/vllm-ascend:v0.23.0rc1-a3
+  # Atlas 800 A2
+  export IMAGE=m.daocloud.io/quay.io/ascend/vllm-ascend:v0.23.0rc1
+  # Atlas inference products
+  export IMAGE=m.daocloud.io/quay.io/ascend/vllm-ascend:v0.23.0rc1-310p
+  ```
+
+  **Pip install:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## Parallelism Strategy
+
+  The model is ~30 GB and fits in a single 64 GB HBM NPU. Following the **DP-first** principle:
+  - **TP=2 is the recommended default** for most scenarios
+  - Remaining NPUs go to DP for parallel request batches
+  - **TP=8 is only recommended for ultra-long context (256K+)**
+
+  ## Service Verification
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "qwen3.5",
+          "messages": [{"role": "user", "content": "The future of AI is"}],
+          "max_completion_tokens": 1024,
+          "temperature": 0.7,
+          "top_p": 0.95
+      }'
+  ```
+
+  ## Accuracy (AISBench)
+
+  | Model            | dataset | metric   | score  |
+  | ---------------- | ------- | -------- | ------ |
+  | Qwen3.5-27B-w8a8 | gsm8k   | accuracy | 96.74  |
+
+  ## Recommended Configurations
+
+  | Scenario               | Deployment  | NPUs | TP | DP | max-model-len | max-num-seqs |
+  | ---------------------- | ----------- | ---- | -- | -- | ------------- | ------------ |
+  | High Throughput (128K) | Single-Node A2 | 8  | 2  | 4  | 133000        | 32 |
+  | High Throughput (128K) | Single-Node A3 | 16 | 2  | 8  | 133000        | 32 |
+  | Low Latency (128K)     | Single-Node A3 | 16 | 2  | 8  | 133000        | 4  |
+  | Long Context (256K+)   | Single-Node A3 | 16 | 8  | 2  | 266000        | 8  |
+
+  ## Troubleshooting
+
+  Refer to [Performance Tuning Guide](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) and [FAQ](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html).
+
+  ## References
+
+  - [vllm-ascend Docs (v0.23.0)](https://github.com/vllm-project/vllm-ascend/tree/releases/v0.23.0/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md)
+  - [Qwen3.5-27B ModelScope](https://modelscope.cn/models/Qwen/Qwen3.5-27B)
+  - [Qwen3.5-27B-w8a8-mtp (Eco-Tech)](https://www.modelscope.cn/models/Eco-Tech/Qwen3.5-27B-w8a8-mtp)
+  - [Qwen3.6-27B ModelScope](https://modelscope.cn/models/Qwen/Qwen3.6-27B)
+  - [Qwen3.6-27B-w8a8 (Eco-Tech)](https://www.modelscope.cn/models/Eco-Tech/Qwen3.6-27B-w8a8)
+  - [Mooncake PD Disaggregation Guide](https://github.com/vllm-project/vllm-ascend/blob/main/docs/source/features/pd_disaggregation_mooncake_multi_node.md)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
+
+guide_zh: |
+  ## 概述
+
+  Qwen3.5-27B 和 Qwen3.6-27B 是 Qwen3.5/Qwen3.6 系列的密集混合 Mamba-Transformer 语言模型。两者共享相同的混合注意力设计（GDN + 全注意力）和 MTP 头设计，因此在 Ascend NPU 上的部署模式相同。
+
+  **最低版本要求:**
+  - Qwen3.5-27B: vllm-ascend v0.17.0rc1 起支持
+  - Qwen3.6-27B: vllm-ascend v0.18.0rc1 起支持
+  - Atlas 推理产品: v0.23.0rc1 起支持
+
+  本文档基于 **vllm-ascend v0.23.0rc1** 验证编写。
+
+  > **注意**: Qwen3.5-27B 使用 `Eco-Tech/Qwen3.5-27B-w8a8-mtp` 和 `--served-model-name qwen3.5`；Qwen3.6-27B 使用 `Eco-Tech/Qwen3.6-27B-w8a8` 和 `--served-model-name qwen3.6`。
+
+  ## 环境准备
+
+  - **硬件**: 1 台 Atlas 800 A3 (64G × 16) 或 1 台 Atlas 800 A2 (64G × 8)
+  - **模型权重**: 见英文版 Prerequisites 章节
+
+  ### 环境搭建
+
+  **Docker (推荐):**
+  ```bash
+  # Atlas 800 A3
+  export IMAGE=m.daocloud.io/quay.io/ascend/vllm-ascend:v0.23.0rc1-a3
+  # Atlas 800 A2
+  export IMAGE=m.daocloud.io/quay.io/ascend/vllm-ascend:v0.23.0rc1
+  ```
+
+  **Pip 安装:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## 并行策略
+
+  模型约 30 GB，可放入单个 64 GB HBM NPU。遵循 **DP 优先** 原则：
+  - **TP=2 是推荐默认值**
+  - 剩余 NPU 分配给 DP 用于并行请求批处理
+  - **TP=8 仅推荐用于超长上下文 (256K+) 场景**
+
+  ## 服务验证
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "qwen3.5",
+          "messages": [{"role": "user", "content": "人工智能的未来是"}],
+          "max_completion_tokens": 1024,
+          "temperature": 0.7,
+          "top_p": 0.95
+      }'
+  ```
+
+  ## 精度 (AISBench)
+
+  | 模型             | 数据集 | 指标     | 得分  |
+  | ---------------- | ------ | -------- | ----- |
+  | Qwen3.5-27B-w8a8 | gsm8k  | accuracy | 96.74 |
+
+  ## 推荐配置
+
+  | 场景           | 部署方式       | NPU 数量 | TP | DP | max-model-len | max-num-seqs |
+  | -------------- | -------------- | -------- | -- | -- | ------------- | ------------ |
+  | 高吞吐 (128K)  | 单节点 A2      | 8        | 2  | 4  | 133000        | 32 |
+  | 高吞吐 (128K)  | 单节点 A3      | 16       | 2  | 8  | 133000        | 32 |
+  | 低延迟 (128K)  | 单节点 A3      | 16       | 2  | 8  | 133000        | 4  |
+  | 长上下文 (256K+)| 单节点 A3      | 16       | 8  | 2  | 266000        | 8  |
+
+  ## 故障排除
+
+  参考 [性能调优指南](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) 和 [常见问题](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html)。
+
+  ## 参考
+
+  - [vllm-ascend 文档 (v0.23.0)](https://github.com/vllm-project/vllm-ascend/tree/releases/v0.23.0/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md)
+  - [Qwen3.5-27B ModelScope](https://modelscope.cn/models/Qwen/Qwen3.5-27B)
+  - [Qwen3.6-27B ModelScope](https://modelscope.cn/models/Qwen/Qwen3.6-27B)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)

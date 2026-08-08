@@ -1,0 +1,288 @@
+meta:
+  title: "GLM-4.5/4.6/4.7"
+  slug: "glm-4.x"
+  provider: "THUDM"
+  description: "GLM-4.x series are Mixture-of-Experts (MoE) foundational models from Zhipu AI, specifically designed for agent applications. GLM-4.7 features MTP speculative decoding, expert parallelism, and tool-calling support on Ascend NPUs."
+  title_zh: "GLM-4.5/4.6/4.7"
+  description_zh: "GLM-4.x 系列是智谱 AI 的混合专家 (MoE) 基础模型，专为智能体应用设计。GLM-4.7 支持 MTP 投机解码、专家并行和工具调用。"
+  date_added: 2026-07-13
+  date_updated: 2026-07-13
+  difficulty: intermediate
+  tasks:
+    - text
+  performance_headline: "Single-node deployment on Atlas 800 A3 (128G × 8) with W8A8 precision"
+  hardware:
+    atlas_800_a3: verified
+    atlas_800_a2: verified
+
+model:
+  model_id: "ZhipuAI/GLM-4.7"
+  min_vllm_version: "0.10.0rc1"
+  architecture: moe
+  parameter_count: "31B"
+  context_length: 133000
+  base_args:
+    - "--trust-remote-code"
+    - "--enable-expert-parallel"
+    - "--gpu-memory-utilization"
+    - "0.9"
+    - "--seed"
+    - "1024"
+  base_env:
+    HCCL_OP_EXPANSION_MODE: "AIV"
+    HCCL_BUFFSIZE: "512"
+    OMP_PROC_BIND: "false"
+    OMP_NUM_THREADS: "1"
+    PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
+    VLLM_ASCEND_BALANCE_SCHEDULING: "1"
+    VLLM_ASCEND_ENABLE_TOPK_OPTIMIZE: "1"
+
+features:
+  quantization_ascend:
+    description: "Enable Ascend W8A8 quantization (remove for BF16 weights)."
+    label: "Ascend Quant"
+    args:
+      - "--quantization"
+      - "ascend"
+  mtp_spec_decoding:
+    description: "Enable MTP (Multi-Token Prediction) speculative decoding with 3 tokens."
+    label: "MTP Spec Decoding"
+    args:
+      - "--speculative-config"
+      - '{"num_speculative_tokens": 3, "method": "mtp"}'
+  tool_calling:
+    description: "Enable GLM-4.7 function calling with tool parser and reasoning parser."
+    label: "Tool Calling"
+    args:
+      - "--tool-call-parser"
+      - "glm47"
+      - "--reasoning-parser"
+      - "glm45"
+      - "--enable-auto-tool-choice"
+  cpu_binding:
+    description: "Enable CPU core binding for reduced NUMA latencies."
+    label: "CPU Binding"
+    args:
+      - "--additional-config"
+      - '{"enable_cpu_binding": true}'
+  flashcomm1:
+    description: "Enable FlashComm communication optimization (disable for long-sequence >=16k with low concurrency <=8)."
+    label: "FlashComm1"
+    args: []
+    env:
+      VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
+  shared_expert_dp:
+    description: "Enable data parallelism for shared experts in MoE models."
+    label: "Shared Expert DP"
+    args:
+      - "--additional-config"
+      - '{"enable_shared_expert_dp": true}'
+
+opt_in_features:
+  - mtp_spec_decoding
+  - tool_calling
+  - cpu_binding
+  - flashcomm1
+  - shared_expert_dp
+
+variants:
+  default:
+    precision: w8a8
+    vram_minimum_gb: 64
+    description: "W8A8 quantized weights on Atlas 800 A2/A3 (recommended)"
+    extra_args:
+      - "--quantization"
+      - "ascend"
+    extra_env:
+      VLLM_ASCEND_ENABLE_MLAPO: "1"
+  bf16:
+    precision: bf16
+    vram_minimum_gb: 70
+    description: "BF16 weights on Atlas 800 A3"
+    extra_args: []
+    extra_env: {}
+
+compatible_strategies:
+  - single_node_tp
+  - multi_node_tp
+
+hardware_overrides:
+  ascend_a3:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512], "cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env: {}
+  ascend_a2:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512], "cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env: {}
+
+guide: |
+  ## Overview
+
+  GLM-4.x (GLM-4.5/4.6/4.7) are Mixture-of-Experts (MoE) foundational models from Zhipu AI (THUDM), specifically designed for agent applications. They support Multi-Token Prediction (MTP) speculative decoding, expert parallelism, data parallelism, and tool calling on Ascend NPUs.
+
+  GLM-4.5, GLM-4.6, and GLM-4.7 share the same architecture and deployment commands. The differences are in the training data and model weights. This guide uses GLM-4.7 as the primary example.
+
+  The GLM-4.5 model is first supported in vllm-ascend v0.10.0rc1. This guide is validated on **vLLM-Ascend v0.22.1rc**.
+
+  > **Note**: GLM-4.6 does not have an MTP quantized version. For GLM-4.5 or GLM-4.6, simply replace the model path and weight download URL.
+
+  ## Prerequisites
+
+  - **Hardware**: Atlas 800I A3 (64G × 16) × 1 or Atlas 800I A2 (64G × 8) × 1
+  - **Model weights**:
+    - GLM-4.5 BF16: [ModelScope](https://www.modelscope.cn/models/ZhipuAI/GLM-4.5)
+    - GLM-4.5 W8A8: [Modelers](https://modelers.cn/models/Modelers_Park/GLM-4.5-w8a8)
+    - GLM-4.6 BF16: [ModelScope](https://www.modelscope.cn/models/ZhipuAI/GLM-4.6)
+    - GLM-4.6 W8A8: [Modelers](https://modelers.cn/models/Modelers_Park/GLM-4.6-w8a8)
+    - GLM-4.7 BF16: [ModelScope](https://www.modelscope.cn/models/ZhipuAI/GLM-4.7)
+    - GLM-4.7 W8A8: [ModelScope](https://modelscope.cn/models/Eco-Tech/GLM-4.7-W8A8-floatmtp)
+
+  ### Environment Setup
+
+  **Docker (recommended):**
+  ```bash
+  # A3
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3
+  # A2
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}
+  ```
+
+  **Pip install:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## Tuning Notes
+
+  - `fusion_ops_gmmswigluquant` should be `false` when total NPUs <= 16 due to performance degradation.
+  - `VLLM_ASCEND_ENABLE_FLASHCOMM1`: disable for long-sequence (>=16k) and low-concurrency (<=8 batch size).
+  - `VLLM_ASCEND_ENABLE_TOPK_OPTIMIZE=1` is recommended for GLM-4.x models.
+  - Long-context low-concurrency (<=4): recommend `dp1 tp16`; high-concurrency (>4): recommend `dp2 tp8`.
+
+  ## Service Verification
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "glm",
+          "messages": [{"role": "user", "content": "Give me a short introduction to large language models."}],
+          "max_tokens": 256,
+          "temperature": 0
+      }'
+  ```
+
+  ## Accuracy Results (GLM-4.7, Atlas 800 A3)
+
+  | Dataset | Metric   | Score  |
+  | ------- | -------- | ------ |
+  | GPQA    | accuracy | 84.85  |
+  | MATH500 | accuracy | 98.8   |
+
+  ## Recommended Configurations
+
+  | Scenario                      | Config     | max-model-len | max-num-seqs | Notes |
+  | ----------------------------- | ---------- | ------------- | ------------ | ----- |
+  | Long-context, low concurrency | dp1 tp16   | 133000        | 4            | Maximizes context capacity |
+  | Long-context, high concurrency| dp2 tp8    | 133000        | 16           | Balances throughput and context |
+  | Low-latency, short sequences  | dp2 tp8    | 133000        | 16           | Reduces per-token latency |
+  | High-throughput               | dp2 tp8    | 133000        | 16           | Maximizes concurrent requests |
+
+  ## Troubleshooting
+
+  Refer to [Performance Tuning Guide](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) and [FAQ](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html).
+
+  ## References
+
+  - [vllm-ascend Documentation](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM4.x.html)
+  - [ModelScope GLM-4.5](https://www.modelscope.cn/models/ZhipuAI/GLM-4.5)
+  - [ModelScope GLM-4.6](https://www.modelscope.cn/models/ZhipuAI/GLM-4.6)
+  - [ModelScope GLM-4.7](https://www.modelscope.cn/models/ZhipuAI/GLM-4.7)
+  - [ModelScope GLM-4.7 W8A8](https://modelscope.cn/models/Eco-Tech/GLM-4.7-W8A8-floatmtp)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
+
+guide_zh: |
+  ## 概述
+
+  GLM-4.x（GLM-4.5/4.6/4.7）是智谱 AI (THUDM) 的混合专家 (MoE) 基础模型，专为智能体应用设计。支持多令牌预测 (MTP) 投机解码、专家并行、数据并行和工具调用。
+
+  GLM-4.5、GLM-4.6 和 GLM-4.7 共享相同的架构和部署命令，区别在于训练数据和模型权重。本文档以 GLM-4.7 为主要示例。
+
+  GLM-4.5 首次支持于 vllm-ascend v0.10.0rc1。本文档基于 **vLLM-Ascend v0.22.1rc** 验证编写。
+
+  > **注意**: GLM-4.6 没有 MTP 量化版本。
+
+  ## 环境准备
+
+  - **硬件**: Atlas 800I A3 (64G × 16) × 1 或 Atlas 800I A2 (64G × 8) × 1
+  - **模型权重**: 见英文版 Prerequisites 章节
+
+  ### 环境搭建
+
+  **Docker (推荐):**
+  ```bash
+  # A3
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3
+  # A2
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}
+  ```
+
+  **Pip 安装:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## 调优说明
+
+  - `fusion_ops_gmmswigluquant` 在 NPU 总数 <= 16 时应设为 `false`。
+  - `VLLM_ASCEND_ENABLE_FLASHCOMM1`：长序列 (>=16k) 和低并发 (<=8) 场景下应禁用。
+  - `VLLM_ASCEND_ENABLE_TOPK_OPTIMIZE=1` 推荐用于 GLM-4.x 系列。
+  - 长上下文低并发 (<=4)：推荐 `dp1 tp16`；高并发 (>4)：推荐 `dp2 tp8`。
+
+  ## 服务验证
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "glm",
+          "messages": [{"role": "user", "content": "简单介绍一下大语言模型。"}],
+          "max_tokens": 256,
+          "temperature": 0
+      }'
+  ```
+
+  ## 精度结果 (GLM-4.7, Atlas 800 A3)
+
+  | 数据集  | 指标     | 得分  |
+  | ------- | -------- | ----- |
+  | GPQA    | accuracy | 84.85 |
+  | MATH500 | accuracy | 98.8  |
+
+  ## 推荐配置
+
+  | 场景               | 配置       | max-model-len | max-num-seqs | 备注 |
+  | ------------------ | ---------- | ------------- | ------------ | ---- |
+  | 长上下文低并发      | dp1 tp16   | 133000        | 4            | 最大化上下文容量 |
+  | 长上下文高并发      | dp2 tp8    | 133000        | 16           | 平衡吞吐和上下文 |
+  | 低延迟短序列        | dp2 tp8    | 133000        | 16           | 降低单 token 延迟 |
+  | 高吞吐短序列        | dp2 tp8    | 133000        | 16           | 最大化并发请求处理 |
+
+  ## 故障排除
+
+  参考 [性能调优指南](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) 和 [常见问题](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html)。
+
+  ## 参考
+
+  - [vllm-ascend 文档](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM4.x.html)
+  - [ModelScope GLM-4.7](https://www.modelscope.cn/models/ZhipuAI/GLM-4.7)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)

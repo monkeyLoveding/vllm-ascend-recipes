@@ -1,0 +1,314 @@
+meta:
+  title: "GLM-5/5.1"
+  slug: "glm-5"
+  provider: "THUDM"
+  description: "GLM-5 and GLM-5.1 are Mixture-of-Experts (MoE) models from Zhipu AI with 744B total parameters, targeting complex systems engineering and long-horizon agentic tasks. Supports MTP speculative decoding, expert parallelism, and PD disaggregation on Ascend NPUs."
+  title_zh: "GLM-5/5.1"
+  description_zh: "GLM-5 和 GLM-5.1 是智谱 AI 的混合专家 (MoE) 模型，拥有 744B 总参数，面向复杂系统工程和长周期智能体任务。支持 MTP 投机解码、专家并行和 PD 分离部署。"
+  date_added: 2026-07-13
+  date_updated: 2026-07-13
+  difficulty: advanced
+  tasks:
+    - text
+  performance_headline: "Multi-node deployment on Atlas 800 A3 (128G × 8) with W4A8/W8A8 precision"
+  hardware:
+    atlas_800_a3: verified
+    atlas_800_a2: verified
+
+model:
+  model_id: "zai-org/GLM-5"
+  min_vllm_version: "0.17.0rc1"
+  architecture: moe
+  parameter_count: "744B"
+  context_length: 131072
+  base_args:
+    - "--trust-remote-code"
+    - "--enable-expert-parallel"
+    - "--seed"
+    - "1024"
+  base_env:
+    HCCL_OP_EXPANSION_MODE: "AIV"
+    HCCL_BUFFSIZE: "200"
+    OMP_PROC_BIND: "false"
+    OMP_NUM_THREADS: "1"
+    PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
+    VLLM_ASCEND_BALANCE_SCHEDULING: "1"
+
+features:
+  quantization_ascend:
+    description: "Enable Ascend quantization (W4A8 or W8A8). Remove for BF16 weights."
+    label: "Ascend Quant"
+    args:
+      - "--quantization"
+      - "ascend"
+  mtp_spec_decoding:
+    description: "Enable MTP (Multi-Token Prediction) speculative decoding with 3 tokens."
+    label: "MTP Spec Decoding"
+    args:
+      - "--speculative-config"
+      - '{"num_speculative_tokens": 3, "method": "deepseek_mtp"}'
+  flashcomm1:
+    description: "Enable FlashComm communication optimization (disable for long-sequence >=16k with low concurrency <=8)."
+    label: "FlashComm1"
+    args: []
+    env:
+      VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
+  mlapo:
+    description: "Enable MLAPO optimization (required for W8A8 quantized models)."
+    label: "MLAPO"
+    args: []
+    env:
+      VLLM_ASCEND_ENABLE_MLAPO: "1"
+  multistream_overlap:
+    description: "Enable multi-stream overlap for MoE shared expert computation."
+    label: "Multi-stream Overlap"
+    args:
+      - "--additional-config"
+      - '{"multistream_overlap_shared_expert": true}'
+  chunked_prefill:
+    description: "Enable chunked prefill for long context scenarios."
+    label: "Chunked Prefill"
+    args:
+      - "--enable-chunked-prefill"
+  prefix_caching:
+    description: "Enable automatic KV-cache prefix caching for long context scenarios."
+    label: "Prefix Caching"
+    args:
+      - "--enable-prefix-caching"
+  tool_calling:
+    description: "Enable GLM-5 function calling with tool parser and reasoning parser."
+    label: "Tool Calling"
+    args:
+      - "--tool-call-parser"
+      - "glm47"
+      - "--reasoning-parser"
+      - "glm45"
+      - "--enable-auto-tool-choice"
+
+opt_in_features:
+  - mtp_spec_decoding
+  - flashcomm1
+  - mlapo
+  - multistream_overlap
+  - chunked_prefill
+  - prefix_caching
+  - tool_calling
+
+variants:
+  w4a8:
+    precision: w4a8
+    vram_minimum_gb: 64
+    description: "W4A8 ultra-low precision weights on Atlas 800 A2/A3 — maximum context (200K)"
+    extra_args:
+      - "--quantization"
+      - "ascend"
+      - "--gpu-memory-utilization"
+      - "0.95"
+    extra_env: {}
+  default:
+    precision: w8a8
+    vram_minimum_gb: 128
+    description: "W8A8 quantized weights on Atlas 800 A3 (recommended)"
+    extra_args:
+      - "--quantization"
+      - "ascend"
+      - "--gpu-memory-utilization"
+      - "0.95"
+    extra_env:
+      VLLM_ASCEND_ENABLE_MLAPO: "1"
+  bf16:
+    precision: bf16
+    vram_minimum_gb: 256
+    description: "BF16 weights (requires 2 A3 or 4 A2 nodes)"
+    extra_args:
+      - "--gpu-memory-utilization"
+      - "0.95"
+    extra_env: {}
+
+compatible_strategies:
+  - single_node_tp
+  - multi_node_tp
+  - multi_node_pd_disaggregation
+
+hardware_overrides:
+  ascend_a3:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env:
+      VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
+  ascend_a2:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    extra_env:
+      VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
+
+guide: |
+  ## Overview
+
+  GLM-5 and GLM-5.1 are Mixture-of-Experts (MoE) models from Zhipu AI (THUDM), targeting complex systems engineering and long-horizon agentic tasks. With 744B total parameters, these models support Multi-Token Prediction (MTP) speculative decoding, expert parallelism, data parallelism, and Prefill-Decode disaggregation on Ascend NPUs.
+
+  GLM-5 and GLM-5.1 share the same architecture and deployment commands. The differences are in the training data and model weights. This guide uses GLM-5 as the primary example; replace the model path for GLM-5.1.
+
+  GLM-5 is first supported in vllm-ascend v0.17.0rc1. This guide is validated on **vLLM-Ascend v0.22.1rc**.
+  > **Note**: `transformers >= 5.2.0` is required for GLM-5 models.
+
+  ## Prerequisites
+
+  - **Hardware**:
+    - W4A8: 1 × Atlas 800I A3 (64G × 16) or 1 × Atlas 800I A2 (64G × 8)
+    - W8A8: 1 × Atlas 800I A3 (64G × 16)
+    - BF16: 2 × Atlas 800I A3 (64G × 16)
+  - **Model weights**:
+    - GLM-5 BF16: [ModelScope](https://www.modelscope.cn/models/ZhipuAI/GLM-5) / [HuggingFace](https://huggingface.co/zai-org/GLM-5)
+    - GLM-5 W4A8: [ModelScope](https://modelscope.cn/models/Eco-Tech/GLM-5-w4a8)
+    - GLM-5 W8A8: [ModelScope](https://www.modelscope.cn/models/Eco-Tech/GLM-5-w8a8)
+    - GLM-5.1 BF16: [HuggingFace](https://huggingface.co/zai-org/GLM-5.1)
+    - GLM-5.1 W4A8/W8A8: [Modelers](https://modelers.cn/models/Eco-Tech/GLM-5.1-w4a8)
+
+  ### Environment Setup
+
+  **Docker (recommended):**
+  ```bash
+  # A3
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3
+  # A2
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}
+  ```
+
+  **Pip install:**
+  ```bash
+  pip install transformers>=5.2.0
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  > **BF16 MTP weight adjustment**: For BF16 weights with MTP speculative decoding, run `adjust_weight.py` to create `mtp-others.safetensors`. Not required for quantized (W4A8/W8A8) weights.
+
+  ## Tuning Notes
+
+  - For single-node low-latency scenarios, recommend `dp1 tp16` with expert parallel disabled.
+  - `VLLM_ASCEND_ENABLE_FLASHCOMM1=1` should be disabled for long-sequence (>=16k) and low-concurrency (<=8 batch size).
+  - `VLLM_ASCEND_ENABLE_MLAPO=1` is required for W8A8 quantized models.
+
+  ## Service Verification
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "glm-5",
+          "messages": [{"role": "user", "content": "Give me a short introduction to large language models."}],
+          "max_tokens": 256,
+          "temperature": 0
+      }'
+  ```
+
+  ## Recommended Configurations
+
+  | Scenario          | Deployment | Device | NPUs | Config    | max-model-len | Quantization |
+  | ----------------- | ---------- | ------ | ---- | --------- | ------------- | ------------ |
+  | High Throughput   | Single-Node| A3     | 16   | dp1 tp16  | 200000        | W4A8         |
+  | Low Latency       | Single-Node| A3     | 16   | dp1 tp16 (no EP) | 200000   | W4A8         |
+  | Long Context      | Multi-Node | A3     | 32   | dp2 tp16  | 131072        | W4A8/BF16    |
+  | High Throughput   | Single-Node| A3     | 16   | tp16      | 40960         | W8A8         |
+  | PD Separation     | 1P1D       | A3     | 32   | P: dp4 tp8, D: dp8 tp4 | 133120/150000 | W4A8 |
+
+  ## Troubleshooting
+
+  - **Tokenizer error**: Ensure `transformers >= 5.2.0` is installed.
+  - Refer to [Performance Tuning Guide](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) and [FAQ](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html).
+
+  ## References
+
+  - [vllm-ascend Documentation (GLM-5)](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.html)
+  - [ModelScope GLM-5 BF16](https://www.modelscope.cn/models/ZhipuAI/GLM-5)
+  - [ModelScope GLM-5 W4A8](https://modelscope.cn/models/Eco-Tech/GLM-5-w4a8)
+  - [ModelScope GLM-5 W8A8](https://www.modelscope.cn/models/Eco-Tech/GLM-5-w8a8)
+  - [HuggingFace GLM-5.1 BF16](https://huggingface.co/zai-org/GLM-5.1)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
+
+guide_zh: |
+  ## 概述
+
+  GLM-5 和 GLM-5.1 是智谱 AI (THUDM) 的混合专家 (MoE) 模型，拥有 744B 总参数，面向复杂系统工程和长周期智能体任务。支持 MTP 投机解码、专家并行、数据并行和 PD 分离部署。
+
+  GLM-5 和 GLM-5.1 共享相同的架构和部署命令，区别在于训练数据和模型权重。本文档以 GLM-5 为主要示例。
+
+  GLM-5 首次支持于 vllm-ascend v0.17.0rc1。本文档基于 **vLLM-Ascend v0.22.1rc** 验证编写。
+  > **注意**: GLM-5 模型需要 `transformers >= 5.2.0`。
+
+  ## 环境准备
+
+  - **硬件**:
+    - W4A8: 1 × Atlas 800I A3 (64G × 16) 或 1 × Atlas 800I A2 (64G × 8)
+    - W8A8: 1 × Atlas 800I A3 (64G × 16)
+    - BF16: 2 × Atlas 800I A3 (64G × 16)
+  - **模型权重**: 见英文版 Prerequisites 章节
+
+  ### 环境搭建
+
+  **Docker (推荐):**
+  ```bash
+  # A3
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3
+  # A2
+  docker pull quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}
+  ```
+
+  **Pip 安装:**
+  ```bash
+  pip install transformers>=5.2.0
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  > **BF16 MTP 权重调整**: BF16 权重使用 MTP 投机解码需要运行 `adjust_weight.py` 生成 `mtp-others.safetensors`。量化权重 (W4A8/W8A8) 不需要此步骤。
+
+  ## 调优说明
+
+  - 单节点低延迟场景推荐 `dp1 tp16` 并禁用 expert parallel。
+  - `VLLM_ASCEND_ENABLE_FLASHCOMM1=1` 在长序列 (>=16k) 和低并发 (<=8) 时应禁用。
+  - `VLLM_ASCEND_ENABLE_MLAPO=1` 是 W8A8 量化模型的必要配置。
+
+  ## 服务验证
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "glm-5",
+          "messages": [{"role": "user", "content": "简单介绍一下大语言模型。"}],
+          "max_tokens": 256,
+          "temperature": 0
+      }'
+  ```
+
+  ## 推荐配置
+
+  | 场景       | 部署方式  | 设备 | NPU 数量 | 配置             | max-model-len | 量化方式 |
+  | ---------- | --------- | ---- | -------- | ---------------- | ------------- | -------- |
+  | 高吞吐     | 单节点    | A3   | 16       | dp1 tp16         | 200000        | W4A8     |
+  | 低延迟     | 单节点    | A3   | 16       | dp1 tp16 (无 EP) | 200000        | W4A8     |
+  | 长上下文   | 多节点    | A3   | 32       | dp2 tp16         | 131072        | W4A8/BF16|
+  | 高吞吐     | 单节点    | A3   | 16       | tp16             | 40960         | W8A8     |
+  | PD 分离    | 1P1D      | A3   | 32       | P: dp4 tp8, D: dp8 tp4 | 133120/150000 | W4A8 |
+
+  ## 故障排除
+
+  - **Tokenizer 错误**: 确保已安装 `transformers >= 5.2.0`。
+  - 参考 [性能调优指南](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) 和 [常见问题](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html)。
+
+  ## 参考
+
+  - [vllm-ascend 文档 (GLM-5)](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.html)
+  - [ModelScope GLM-5 BF16](https://www.modelscope.cn/models/ZhipuAI/GLM-5)
+  - [ModelScope GLM-5 W4A8](https://modelscope.cn/models/Eco-Tech/GLM-5-w4a8)
+  - [ModelScope GLM-5 W8A8](https://www.modelscope.cn/models/Eco-Tech/GLM-5-w8a8)
+  - [HuggingFace GLM-5.1 BF16](https://huggingface.co/zai-org/GLM-5.1)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
