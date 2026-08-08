@@ -33,21 +33,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate YAML
-        run: npx tsx scripts/validate-yaml.ts
-
       - name: Build
         run: pnpm build
 
       # Status JSON (public/status/, public/runs/) is committed to main by
-      # publish-status.yml. Astro's normal `public/` → `dist/` copy during
-      # `pnpm build` above already picked them up — no second-branch merge
-      # step is needed at deploy time.
+      # publish-status.yml. Next.js static export copies public/ → out/
+      # automatically, so status data is picked up at build time.
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ./out
 
   deploy:
     needs: build

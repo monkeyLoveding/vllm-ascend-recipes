@@ -1,0 +1,141 @@
+{
+  "kv_store_centralized_mooncake": {
+    "name": "kv_store_centralized_mooncake",
+    "deploy_type": "kv_store_lb",
+    "display_name": "Centralized KV Store (Mooncake)",
+    "label": "Centralized (standalone store)",
+    "order": 2,
+    "description": "Multi-instance vLLM cluster with shared centralized KV cache via MooncakeStoreConnector in standalone-store mode. A dedicated mooncake_store_service process owns the entire CPU DRAM pool; vLLM GPUs contribute zero local memory (global_segment_size=0 per GPU). A vllm-router with cache_aware policy routes requests so prefix- matched prompts land on the same instance — maximizing KV cache hits. Decouples cache capacity from vLLM lifecycle — store survives vLLM restarts. Recommended for production deployments with large cache pools.\n",
+    "router": {
+      "policy": "cache_aware",
+      "install": "uv pip install vllm-router",
+      "port": 30080
+    },
+    "vllm": {
+      "vllm_args": [
+        "--kv-transfer-config",
+        "{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\"}"
+      ],
+      "env": {
+        "MOONCAKE_CONFIG_PATH": "$MOONCAKE_CONFIG_PATH",
+        "PYTHONHASHSEED": 0
+      },
+      "install": {
+        "nvidia": "uv pip install 'mooncake-transfer-engine>=0.3.10'",
+        "amd": "uv pip install 'mooncake-transfer-engine-non-cuda>=0.3.10'"
+      },
+      "port": 8000
+    },
+    "pd": {
+      "prefill": {
+        "args": [
+          "--kv-transfer-config",
+          "{\"kv_connector\":\"MultiConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"connectors\":[{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_producer\",\"kv_load_failure_policy\":\"fail\"},{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"load_async\":true,\"lookup_async\":true}}]}}"
+        ]
+      },
+      "decode": {
+        "args": [
+          "--kv-transfer-config",
+          "{\"kv_connector\":\"MultiConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"connectors\":[{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_consumer\",\"kv_load_failure_policy\":\"fail\"},{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"load_async\":true,\"lookup_async\":true}}]}}"
+        ]
+      }
+    },
+    "mooncake_master": {
+      "command": "# Reachable by every instance and the store as $MOONCAKE_MASTER_IP:50051.\n# 30s KV lease; eviction starts at 95% pool usage and frees 10% per pass.\nmooncake_master \\\n  -rpc_port=50051 \\\n  -rpc_thread_num=4 \\\n  -default_kv_lease_ttl=30000 \\\n  -eviction_high_watermark_ratio=0.95 \\\n  -eviction_ratio=0.1 \\\n  -logtostderr",
+      "description": "Lightweight metadata coordinator. One instance per cluster."
+    },
+    "mooncake_store_config": {
+      "command": "python3 -m mooncake.mooncake_store_service --config $MOONCAKE_STORE_CONFIG_PATH",
+      "description": "Centralized CPU DRAM pool — registers global_segment_size per store node and survives vLLM restarts.",
+      "note": "global_segment_size here IS per node (not per GPU) — size it to each\nstore node's RAM. device_name \"\" auto-selects the store node's RDMA NICs.",
+      "config": {
+        "mode": "standalone-store",
+        "metadata_server": "P2PHANDSHAKE",
+        "master_server_address": "$MOONCAKE_MASTER_IP:50051",
+        "global_segment_size": "500GB",
+        "local_buffer_size": "4GB",
+        "protocol": "rdma",
+        "device_name": "$MOONCAKE_STORE_DEVICE_NAME",
+        "enable_offload": false
+      }
+    },
+    "mooncake_vllm_config": {
+      "mode": "standalone-store",
+      "note": "Same file on every instance node. Each GPU donates no memory\n(global_segment_size 0 per GPU) — capacity lives in the store service.\ndevice_name \"\" auto-selects RDMA NICs by GPU-NIC PCIe/NUMA affinity.",
+      "template": {
+        "mode": "standalone-store",
+        "metadata_server": "P2PHANDSHAKE",
+        "master_server_address": "$MOONCAKE_MASTER_IP:50051",
+        "global_segment_size": 0,
+        "local_buffer_size": "4GB",
+        "protocol": "rdma",
+        "device_name": "$MOONCAKE_DEVICE_NAME",
+        "enable_offload": false
+      }
+    },
+    "min_vllm_version": "0.21.0",
+    "default_instances": 2
+  },
+  "kv_store_distributed_mooncake": {
+    "name": "kv_store_distributed_mooncake",
+    "deploy_type": "kv_store_lb",
+    "display_name": "Distributed KV Store (Mooncake)",
+    "label": "Distributed (embedded)",
+    "order": 1,
+    "description": "Mooncake KV cache in embedded mode — each GPU contributes CPU DRAM (global_segment_size) to the cache pool. A single instance uses it as a CPU offload tier; at 2+ instances a cache_aware vllm-router shares the pool, routing prefix-matched prompts to the same instance. A lightweight mooncake_master coordinates the pool; no separate store process needed.\n",
+    "router": {
+      "policy": "cache_aware",
+      "install": "uv pip install vllm-router",
+      "port": 30080
+    },
+    "vllm": {
+      "vllm_args": [
+        "--kv-transfer-config",
+        "{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\"}"
+      ],
+      "env": {
+        "MOONCAKE_CONFIG_PATH": "$MOONCAKE_CONFIG_PATH",
+        "PYTHONHASHSEED": 0
+      },
+      "install": {
+        "nvidia": "uv pip install 'mooncake-transfer-engine>=0.3.10'",
+        "amd": "uv pip install 'mooncake-transfer-engine-non-cuda>=0.3.10'"
+      },
+      "port": 8000
+    },
+    "pd": {
+      "prefill": {
+        "args": [
+          "--kv-transfer-config",
+          "{\"kv_connector\":\"MultiConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"connectors\":[{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_producer\",\"kv_load_failure_policy\":\"fail\"},{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"load_async\":true,\"lookup_async\":true}}]}}"
+        ]
+      },
+      "decode": {
+        "args": [
+          "--kv-transfer-config",
+          "{\"kv_connector\":\"MultiConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"connectors\":[{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_consumer\",\"kv_load_failure_policy\":\"fail\"},{\"kv_connector\":\"MooncakeStoreConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"load_async\":true,\"lookup_async\":true}}]}}"
+        ]
+      }
+    },
+    "mooncake_master": {
+      "command": "# Reachable by every instance as $MOONCAKE_MASTER_IP:50051.\n# 30s KV lease; eviction starts at 95% pool usage and frees 10% per pass.\nmooncake_master \\\n  -rpc_port=50051 \\\n  -rpc_thread_num=4 \\\n  -default_kv_lease_ttl=30000 \\\n  -eviction_high_watermark_ratio=0.95 \\\n  -eviction_ratio=0.1 \\\n  -logtostderr",
+      "description": "Lightweight metadata coordinator. One instance per cluster."
+    },
+    "mooncake_vllm_config": {
+      "mode": "embedded",
+      "note": "Same file on every instance node. global_segment_size is per GPU (not per\nnode) — size it so the total across all GPUs fits in the host RAM you can pin.\ndevice_name \"\" auto-selects RDMA NICs by GPU-NIC PCIe/NUMA affinity.",
+      "template": {
+        "mode": "embedded",
+        "metadata_server": "P2PHANDSHAKE",
+        "master_server_address": "$MOONCAKE_MASTER_IP:50051",
+        "global_segment_size": "100GB",
+        "local_buffer_size": "4GB",
+        "protocol": "rdma",
+        "device_name": "$MOONCAKE_DEVICE_NAME",
+        "enable_offload": false
+      }
+    },
+    "min_vllm_version": "0.21.0",
+    "default_instances": 1
+  }
+}

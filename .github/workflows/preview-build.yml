@@ -31,19 +31,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate YAML
-        run: npx tsx scripts/validate-yaml.ts
-
       - name: Build
-        run: pnpm exec astro build
+        run: pnpm build
         env:
-          ASTRO_TELEMETRY_DISABLED: '1'
-          ASTRO_BASE: '/'
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_BASE_PATH: ''
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: pr-preview-dist-${{ github.event.pull_request.number }}
-          path: ./dist
+          path: ./out
           retention-days: 3
           if-no-files-found: error

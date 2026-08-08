@@ -1,0 +1,189 @@
+{
+  "multi_node_dep": {
+    "name": "multi_node_dep",
+    "deploy_type": "multi_node",
+    "display_name": "Multi-Node Data + Expert Parallel",
+    "orientation": "throughput",
+    "description": "Multi-node DEP. Each node runs TEP over its local GPUs, with DP across nodes. Best throughput for MoE models across multiple nodes. Pass -dp <total_workers> at deploy time. Uses hybrid load balancing across DP workers.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "multi_node": true,
+      "architecture": "moe"
+    },
+    "vllm_args": [
+      "--enable-expert-parallel",
+      "--data-parallel-hybrid-lb"
+    ],
+    "parallel_flag": "--data-parallel-size",
+    "env": {
+      "GLOO_SOCKET_IFNAME": "$IFACE_NAME",
+      "NCCL_SOCKET_IFNAME": "$IFACE_NAME"
+    }
+  },
+  "multi_node_tep": {
+    "name": "multi_node_tep",
+    "deploy_type": "multi_node",
+    "display_name": "Multi-Node Tensor + Expert Parallel",
+    "orientation": "balanced",
+    "description": "Multi-node TEP. Combines cross-node tensor parallel with expert parallel for MoE models. All GPUs across nodes participate in TP, with EP splitting expert layers. Requires InfiniBand interconnect.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "multi_node": true,
+      "architecture": "moe"
+    },
+    "vllm_args": [
+      "--enable-expert-parallel"
+    ],
+    "parallel_flag": "--tensor-parallel-size",
+    "env": {
+      "GLOO_SOCKET_IFNAME": "$IFACE_NAME",
+      "NCCL_SOCKET_IFNAME": "$IFACE_NAME"
+    }
+  },
+  "multi_node_tp": {
+    "name": "multi_node_tp",
+    "deploy_type": "multi_node",
+    "display_name": "Multi-Node Tensor Parallel",
+    "orientation": "latency",
+    "description": "Multi-node TP. Splits the model across GPUs spanning multiple nodes. TP is set to total GPU count across all nodes. Head node serves requests, worker nodes run with --headless. Requires InfiniBand interconnect.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "multi_node": true
+    },
+    "parallel_flag": "--tensor-parallel-size",
+    "env": {
+      "GLOO_SOCKET_IFNAME": "$IFACE_NAME",
+      "NCCL_SOCKET_IFNAME": "$IFACE_NAME"
+    }
+  },
+  "multi_node_tp_dp": {
+    "name": "multi_node_tp_dp",
+    "deploy_type": "multi_node",
+    "display_name": "Multi-Node TP + Data Parallel",
+    "orientation": "balanced",
+    "description": "Tensor parallel within each node, data parallel across nodes — one full model replica per node. TP stays inside the high-bandwidth intra-node NVLink domain; the inter-node link carries only DP coordination, no tensor traffic. E.g. 2× H200 nodes → TP8·DP2, 4× GB200/GB300 NVL4 trays → TP4·DP4.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "multi_node": true
+    },
+    "parallelism": "tp_dp",
+    "vllm_args": [],
+    "parallel_flag": "--tensor-parallel-size",
+    "env": {
+      "GLOO_SOCKET_IFNAME": "$IFACE_NAME",
+      "NCCL_SOCKET_IFNAME": "$IFACE_NAME"
+    }
+  },
+  "multi_node_tp_pp": {
+    "name": "multi_node_tp_pp",
+    "deploy_type": "multi_node",
+    "display_name": "Multi-Node TP + Pipeline Parallel",
+    "orientation": "throughput",
+    "description": "Tensor parallel within each node, pipeline parallel across nodes. TP stays inside the high-bandwidth intra-node NVLink/IB domain; PP is what crosses the slower cross-node link. Good fit for very large models (e.g. Kimi-K2 1T on 16×H800) where pure TP across nodes would bottleneck on inter-node bandwidth.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "multi_node": true
+    },
+    "parallelism": "tp_pp",
+    "vllm_args": [],
+    "parallel_flag": "--tensor-parallel-size",
+    "env": {
+      "GLOO_SOCKET_IFNAME": "$IFACE_NAME",
+      "NCCL_SOCKET_IFNAME": "$IFACE_NAME"
+    }
+  },
+  "pd_cluster": {
+    "name": "pd_cluster",
+    "deploy_type": "pd_cluster",
+    "display_name": "Prefill/Decode Disaggregation",
+    "orientation": "production",
+    "description": "Disaggregated prefill/decode cluster. Splits inference into separate prefill and decode workers communicating via NIXL KV cache transfer. Optimal for high-concurrency, low-latency production deployments. Each role can be a single-node or multi-node DP/TP/EP pool, with its own HTTP port, NIXL side-channel port, and DP coordinator.\n",
+    "hardware_match": {
+      "min_gpus": 8,
+      "multi_node": true
+    },
+    "prefill": {
+      "vllm_args": [
+        "--port",
+        "8001",
+        "--kv-transfer-config",
+        "{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_producer\",\"kv_load_failure_policy\":\"fail\"}",
+        "--enforce-eager"
+      ],
+      "env": {
+        "NCCL_CUMEM_ENABLE": "1",
+        "NCCL_MNNVL_ENABLE": "1",
+        "NCCL_NVLS_ENABLE": "1",
+        "UCX_NET_DEVICES": "all",
+        "VLLM_NIXL_SIDE_CHANNEL_PORT": "5557",
+        "VLLM_NIXL_SIDE_CHANNEL_HOST": "$PREFILL_NODE_1"
+      }
+    },
+    "decode": {
+      "vllm_args": [
+        "--port",
+        "8002",
+        "--kv-transfer-config",
+        "{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_consumer\",\"kv_load_failure_policy\":\"fail\"}",
+        "--compilation-config",
+        "{\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}"
+      ],
+      "env": {
+        "VLLM_NIXL_SIDE_CHANNEL_PORT": "5558",
+        "VLLM_NIXL_SIDE_CHANNEL_HOST": "$DECODE_NODE_1"
+      }
+    },
+    "parallel_flag": "--tensor-parallel-size",
+    "router": {
+      "policy": "round_robin"
+    }
+  },
+  "single_node_dep": {
+    "name": "single_node_dep",
+    "deploy_type": "single_node",
+    "display_name": "Data + Expert Parallel",
+    "orientation": "throughput",
+    "description": "Single-node DEP. Expert layers are shared across all GPUs via EP, dense layers run independently in DP groups. Best throughput for MoE models on 8-GPU single nodes. For MoE models only.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "max_gpus": 8,
+      "multi_node": false,
+      "architecture": "moe"
+    },
+    "vllm_args": [
+      "--enable-expert-parallel"
+    ],
+    "parallel_flag": "--data-parallel-size"
+  },
+  "single_node_tep": {
+    "name": "single_node_tep",
+    "deploy_type": "single_node",
+    "display_name": "Tensor + Expert Parallel",
+    "orientation": "balanced",
+    "description": "Single-node TEP. TP splits dense layers and EP splits expert layers across local GPUs. TP must be set to GPU count to avoid OOM from replicated dense layers. For MoE models only.\n",
+    "hardware_match": {
+      "min_gpus": 2,
+      "max_gpus": 8,
+      "multi_node": false,
+      "architecture": "moe"
+    },
+    "vllm_args": [
+      "--enable-expert-parallel"
+    ],
+    "parallel_flag": "--tensor-parallel-size"
+  },
+  "single_node_tp": {
+    "name": "single_node_tp",
+    "deploy_type": "single_node",
+    "display_name": "Tensor Parallel",
+    "orientation": "latency",
+    "description": "Single-node tensor parallel. Splits the model across all local GPUs. TP size is set to the GPU count at deploy time. The simplest multi-GPU strategy — works for all model architectures.\n",
+    "hardware_match": {
+      "min_gpus": 1,
+      "max_gpus": 8,
+      "multi_node": false
+    },
+    "vllm_args": [],
+    "parallel_flag": "--tensor-parallel-size"
+  }
+}

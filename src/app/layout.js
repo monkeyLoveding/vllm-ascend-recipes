@@ -1,0 +1,143 @@
+import { Inter, JetBrains_Mono } from "next/font/google";
+import Link from "next/link";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { LanguageToggle } from "@/components/ui/language-toggle";
+import { SearchBox } from "@/components/recipes/SearchBox";
+import { getAllRecipes } from "@/lib/recipes";
+import { siteUrl } from "@/lib/site-url";
+import "./globals.css";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
+
+const defaultOgUrl = `/og?title=${encodeURIComponent("vLLM Recipes")}&subtitle=${encodeURIComponent("Deploy any model on any hardware")}`;
+
+export const metadata = {
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "vLLM Recipes",
+    template: "%s | vLLM Recipes",
+  },
+  description: "Deploy any model on any hardware with vLLM. Interactive command builder for model serving.",
+  icons: {
+    icon: { url: "https://docs.vllm.ai/en/latest/assets/logos/vllm-logo-only-light.ico" },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "vLLM Recipes",
+    title: "vLLM Recipes",
+    description: "Deploy any model on any hardware with vLLM. Interactive command builder for model serving.",
+    images: [{ url: defaultOgUrl, width: 1200, height: 630, alt: "vLLM Recipes" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@vllm_project",
+    creator: "@vllm_project",
+    title: "vLLM Recipes",
+    description: "Deploy any model on any hardware with vLLM.",
+    images: [defaultOgUrl],
+  },
+  alternates: { canonical: siteUrl },
+};
+
+export default async function RootLayout({ children }) {
+  // Recipes are small (~50 KB) — fine to load into every page for the
+  // global search box. Server-rendered, cached across requests.
+  const recipes = getAllRecipes();
+  // Drop the heavy `guide` field before sending to the client
+  const searchRecipes = recipes.map((r) => ({
+    hf_org: r.hf_org,
+    hf_repo: r.hf_repo,
+    hf_id: r.hf_id,
+    hf_released: r.hf_released,
+    meta: {
+      title: r.meta.title,
+      provider: r.meta.provider,
+      description: r.meta.description,
+      date_added: r.meta.date_added,
+      date_updated: r.meta.date_updated,
+      tasks: r.meta.tasks,
+      hardware: r.meta.hardware || {},
+    },
+    model: {
+      architecture: r.model.architecture,
+      parameter_count: r.model.parameter_count,
+    },
+    precisions: [...new Set(
+      Object.values(r.variants || {}).map((v) => v?.precision).filter(Boolean)
+    )],
+  }));
+
+  return (
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <body className="antialiased bg-background text-foreground min-h-screen flex flex-col">
+        {/* Global header */}
+        <header className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-30">
+          <div className="max-w-[1480px] mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://docs.vllm.ai/en/latest/assets/logos/vllm-logo-text-light.png"
+                alt="vLLM"
+                width={96}
+                height={36}
+                className="h-8 w-auto dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://docs.vllm.ai/en/latest/assets/logos/vllm-logo-text-dark.png"
+                alt="vLLM"
+                width={96}
+                height={36}
+                className="h-8 w-auto hidden dark:block"
+              />
+              <span className="text-muted-foreground/50 font-light text-xl leading-none">/</span>
+              <span className="font-semibold text-base group-hover:text-vllm-blue transition-colors">Recipes</span>
+            </Link>
+
+            {/* Search — flex-1 so it expands to fill available space */}
+            <div className="flex-1 flex justify-center max-w-xl mx-auto">
+              <SearchBox recipes={searchRecipes} />
+            </div>
+
+            <nav className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
+              <Link href="/browse" className="hover:text-foreground transition-colors hidden sm:inline">Browse</Link>
+              <a href="https://docs.vllm.ai/projects/ascend/en/latest/" className="hover:text-foreground transition-colors hidden sm:inline">Docs</a>
+              <a href="https://github.com/vllm-project/vllm-ascend-recipes" className="hover:text-foreground transition-colors hidden sm:inline">GitHub</a>
+              <LanguageToggle />
+              <ThemeToggle />
+            </nav>
+          </div>
+        </header>
+
+        {/* Content */}
+        <div className="flex-1">
+          {children}
+        </div>
+
+        {/* Global footer */}
+        <footer className="border-t border-border mt-auto">
+          <div className="max-w-[1480px] mx-auto px-4 sm:px-6 py-5 text-xs text-muted-foreground flex flex-wrap gap-x-5 gap-y-2">
+            <a href="https://github.com/vllm-project/vllm-ascend-recipes" className="hover:text-foreground transition-colors">GitHub</a>
+            <a href="https://github.com/vllm-project/vllm-ascend-recipes/issues" className="hover:text-foreground transition-colors">Request a recipe</a>
+            <a href="https://docs.vllm.ai/projects/ascend/en/latest/" className="hover:text-foreground transition-colors">Documentation</a>
+            <a href="https://docs.vllm.ai/projects/ascend/en/latest/user_guide/support_matrix/feature_matrix.html" className="hover:text-foreground transition-colors">Supported Models & Hardware</a>
+            <a href="https://docs.vllm.ai/projects/ascend/en/latest/installation.html" className="hover:text-foreground transition-colors">Install vLLM Ascend</a>
+            <a href="/models.json" className="hover:text-foreground transition-colors">JSON API</a>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
+}

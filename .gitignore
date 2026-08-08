@@ -1,5 +1,10 @@
 # build output
 dist/
+.next/
+out/
+
+# npm lock file (project uses pnpm)
+package-lock.json
 # generated types
 .astro/
 # python bytecode

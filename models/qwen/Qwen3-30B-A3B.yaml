@@ -1,0 +1,251 @@
+meta:
+  title: "Qwen3-30B-A3B"
+  slug: "qwen3-30b-a3b"
+  provider: "Qwen"
+  description: "Mixture-of-Experts model in the Qwen3 series, 30.5B total with 3.3B activated per token. Sparse MoE for efficient inference across reasoning, instruction-following, and agent tasks."
+  title_zh: "Qwen3-30B-A3B"
+  description_zh: "Qwen3 系列的混合专家 (MoE) 模型，30.5B 总参数，3.3B 激活参数。稀疏 MoE 架构实现高效推理。"
+  date_added: 2026-07-07
+  date_updated: 2026-07-07
+  difficulty: intermediate
+  tasks:
+    - text
+  performance_headline: "Single-node deployment on Atlas 800 A2/A3 with W8A8 precision"
+  hardware:
+    atlas_800_a3: verified
+    atlas_800_a2: verified
+
+model:
+  model_id: "Qwen/Qwen3-30B-A3B"
+  min_vllm_version: "0.8.4rc2"
+  architecture: moe
+  parameter_count: "30.5B"
+  active_parameters: "3.3B"
+  context_length: 40960
+  base_args:
+    - "--trust-remote-code"
+    - "--enable-expert-parallel"
+    - "--distributed_executor_backend"
+    - "mp"
+    - "--async-scheduling"
+    - "--no-enable-prefix-caching"
+  base_env: {}
+
+features:
+  spec_decoding:
+    description: "Enable speculative decoding with Eagle3 draft model for improved throughput."
+    label: "Eagle3"
+    args:
+      - "--speculative-config"
+      - '{"method":"eagle3","model":"your_eagle3_model_path","draft_tensor_parallel_size":1,"num_speculative_tokens":3}'
+  quantization_ascend:
+    description: "Enable Ascend W8A8 quantization (remove for BF16 weights)."
+    label: "Ascend Quant"
+    args:
+      - "--quantization"
+      - "ascend"
+
+opt_in_features:
+  - spec_decoding
+
+variants:
+  default:
+    precision: w8a8
+    vram_minimum_gb: 31
+    description: "W8A8 quantized weights on Atlas 800 A2/A3 (recommended)"
+    extra_args:
+      - "--quantization"
+      - "ascend"
+    extra_env: {}
+  bf16:
+    precision: bf16
+    vram_minimum_gb: 73
+    description: "BF16 weights on Atlas 800 A2/A3"
+    extra_args: []
+    extra_env: {}
+
+compatible_strategies:
+  - single_node_tp
+
+hardware_overrides:
+  ascend_a3:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode":"FULL_DECODE_ONLY"}'
+      - "--additional-config"
+      - '{"enable_flashcomm1":true,"weight_nz_mode":2}'
+    extra_env:
+      HCCL_OP_EXPANSION_MODE: "AIV"
+      HCCL_BUFFSIZE: "1024"
+      OMP_PROC_BIND: "false"
+      OMP_NUM_THREADS: "1"
+      PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
+  ascend_a2:
+    extra_args:
+      - "--compilation-config"
+      - '{"cudagraph_mode":"FULL_DECODE_ONLY"}'
+      - "--additional-config"
+      - '{"weight_nz_mode":2}'
+    extra_env:
+      HCCL_BUFFSIZE: "1024"
+      OMP_PROC_BIND: "false"
+      OMP_NUM_THREADS: "1"
+      PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
+
+guide: |
+  ## Overview
+
+  Qwen3-30B-A3B is a Mixture-of-Experts (MoE) model in the Qwen3 series, featuring 30.5B total parameters with 3.3B activated per token. The sparse MoE architecture enables efficient training and inference, delivering strong performance across reasoning, instruction-following, and agent capabilities.
+
+  First supported in vLLM-Ascend v0.8.4rc2. This guide is validated on **vLLM-Ascend v0.22.1rc**. All v0.22.1rc and later versions can run stably.
+
+  ## Prerequisites
+
+  - **Hardware**: Atlas 800I A3 (64G, 1-2 cards) or Atlas 800I A2 (64G, 2-4 cards)
+  - **Model weights**: Download from [ModelScope](https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B) (BF16) or [Eco-Tech](https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8) (W8A8)
+  - **Eagle3 draft model** (optional): Download from [HuggingFace](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)
+
+  ### Environment Setup
+
+  **Docker (recommended):**
+  ```bash
+  docker pull quay.io/ascend/vllm-ascend:latest
+  ```
+
+  **Pip install:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## Quantization
+
+  Qwen3-30B-A3B-W8A8 uses hybrid quantization:
+  - Embedding/QK normalization: BF16
+  - Attention projections: Static W8A8 with per-tensor scales
+  - MoE routing gate: BF16
+  - MoE expert projections: Dynamic W8A8 (input scales computed on-the-fly)
+
+  ## Service Verification
+
+  After starting the service, verify with:
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "qwen3",
+          "messages": [
+              {"role": "user", "content": "Give me a short introduction to large language models."}
+          ],
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "max_completion_tokens": 4096
+      }'
+  ```
+
+  ## Accuracy Results (Atlas 800I A3, W8A8)
+
+  | Dataset       | Metric                | Score  |
+  | ------------- | --------------------- | ------ |
+  | GSM8K         | accuracy (4-shot CoT) | 92.87% |
+  | GPQA-Diamond  | accuracy (0-shot CoT) | 60.10% |
+  | LiveCodeBench | pass@1 (0-shot)       | 60.05% |
+  | AIME 2024     | accuracy (0-shot)     | 76.67% |
+
+  ## Recommended Configurations
+
+  | Scenario        | NPUs   | TP  | max-model-len | max-num-seqs | EP  |
+  | --------------- | ------ | --- | ------------- | ------------ | --- |
+  | High Throughput | 1 (A3) | 1   | 37364         | 100          | Off |
+  | Low Latency     | 2 (A3) | 4   | 37364         | 100          | On  |
+  | Long Context    | 2 (A3) | 4   | 131072        | 14           | On  |
+
+  ## Troubleshooting
+
+  Refer to [Performance Tuning Guide](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) and [FAQ](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html).
+
+  ## References
+
+  - [vllm-ascend Documentation](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3-30B-A3B.html)
+  - [ModelScope (BF16)](https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B)
+  - [ModelScope (W8A8)](https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8)
+  - [Eagle3 Draft Model](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
+
+guide_zh: |
+  ## 概述
+
+  Qwen3-30B-A3B 是 Qwen3 系列的混合专家 (MoE) 模型，拥有 30.5B 总参数和 3.3B 激活参数。稀疏 MoE 架构实现了高效的训练和推理。
+
+  首次支持于 vLLM-Ascend v0.8.4rc2。本文档基于 **vLLM-Ascend v0.22.1rc** 验证编写，所有 v0.22.1rc 及之后版本均可稳定运行。
+
+  ## 环境准备
+
+  - **硬件**: Atlas 800I A3 (64G, 1-2 卡) 或 Atlas 800I A2 (64G, 2-4 卡)
+  - **模型权重**: 从 [ModelScope](https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B) (BF16) 或 [Eco-Tech](https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8) (W8A8) 下载
+  - **Eagle3 草稿模型** (可选): [HuggingFace](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)
+
+  ### 环境搭建
+
+  **Docker (推荐):**
+  ```bash
+  docker pull quay.io/ascend/vllm-ascend:latest
+  ```
+
+  **Pip 安装:**
+  ```bash
+  git clone https://github.com/vllm-project/vllm.git
+  cd vllm && pip install -e .
+  git clone https://github.com/vllm-project/vllm-ascend.git
+  cd vllm-ascend && pip install -e .
+  ```
+
+  ## 量化方案
+
+  Qwen3-30B-A3B-W8A8 采用混合量化：Embedding/QK Norm 保持 BF16；Attention 投影使用静态 W8A8；MoE 门控保持 BF16；MoE 专家投影使用动态 W8A8。
+
+  ## 服务验证
+
+  ```bash
+  curl http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+          "model": "qwen3",
+          "messages": [
+              {"role": "user", "content": "简单介绍一下大语言模型。"}
+          ],
+          "temperature": 0.6,
+          "max_completion_tokens": 4096
+      }'
+  ```
+
+  ## 精度结果 (Atlas 800I A3, W8A8)
+
+  | 数据集        | 指标                  | 得分   |
+  | ------------- | --------------------- | ------ |
+  | GSM8K         | accuracy (4-shot CoT) | 92.87% |
+  | GPQA-Diamond  | accuracy (0-shot CoT) | 60.10% |
+  | LiveCodeBench | pass@1 (0-shot)       | 60.05% |
+  | AIME 2024     | accuracy (0-shot)     | 76.67% |
+
+  ## 推荐配置
+
+  | 场景       | NPU 数量 | TP  | max-model-len | max-num-seqs | EP  |
+  | ---------- | -------- | --- | ------------- | ------------ | --- |
+  | 高吞吐     | 1 (A3)   | 1   | 37364         | 100          | 关闭 |
+  | 低延迟     | 2 (A3)   | 4   | 37364         | 100          | 开启 |
+  | 长上下文   | 2 (A3)   | 4   | 131072        | 14           | 开启 |
+
+  ## 故障排除
+
+  参考 [性能调优指南](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/performance_and_debug/optimization_and_tuning.html) 和 [常见问题](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html)。
+
+  ## 参考
+
+  - [vllm-ascend 文档](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3-30B-A3B.html)
+  - [ModelScope (BF16)](https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B)
+  - [ModelScope (W8A8)](https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8)
+  - [Eagle3 Draft Model](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)
+  - [vllm-ascend GitHub](https://github.com/vllm-project/vllm-ascend)
