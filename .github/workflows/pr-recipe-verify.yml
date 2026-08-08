@@ -61,23 +61,24 @@ jobs:
         run: |
           MODEL_FILES="${{ steps.filter.outputs.models_files }}"
           echo "All changed model files: $MODEL_FILES"
-          EN_RECIPES=$(echo "$MODEL_FILES" | tr ',' '\n' | grep '^models/en/.*\.\(yaml\|yml\)$' || true)
+          # Filter to actual recipe YAMLs (exclude _cache_paths.yaml, old dirs, etc.)
+          RECIPES=$(echo "$MODEL_FILES" | tr ',' '\n' | grep -E '^models/[^/]+/.*\.(yaml|yml)$' | grep -v '_cache_paths' || true)
           # Only trigger deployment verify for whitelisted models (expand as needed)
-          VERIFY_RECIPES=$(echo "$EN_RECIPES" | grep -E 'models/en/Qwen/' || true)
+          VERIFY_RECIPES=$(echo "$RECIPES" | grep -E 'models/(qwen|Qwen)/' || true)
           if [ -n "$VERIFY_RECIPES" ]; then
             COUNT=$(echo "$VERIFY_RECIPES" | wc -l)
             echo "count=$COUNT" >> "$GITHUB_OUTPUT"
             FILES=$(echo "$VERIFY_RECIPES" | jq -R -s -c 'split("\n") | map(select(length > 0))')
             echo "files=$FILES" >> "$GITHUB_OUTPUT"
             echo "Verification recipes ($COUNT): $VERIFY_RECIPES"
-            SKIPPED_RECIPES=$(echo "$EN_RECIPES" | grep -v -E 'models/en/Qwen/' || true)
+            SKIPPED_RECIPES=$(echo "$RECIPES" | grep -v -E 'models/(qwen|Qwen)/' || true)
             if [ -n "$SKIPPED_RECIPES" ]; then
               echo "Skipped (not in whitelist): $SKIPPED_RECIPES"
             fi
           else
             echo "count=0" >> "$GITHUB_OUTPUT"
             echo "files=[]" >> "$GITHUB_OUTPUT"
-            echo "No models/en/ recipe files changed"
+            echo "No whitelisted recipe files changed"
           fi
 
   # ============================================================
@@ -104,22 +105,6 @@ jobs:
 
       - name: Validate YAML
         run: pnpm validate
-
-      - name: Check i18n pairing
-        run: |
-          echo "=== Checking en/zh recipe pairing ==="
-          MISSING_ZH=""
-          for en_file in models/en/**/*.yaml; do
-            zh_file="${en_file/en/zh}"
-            if [ ! -f "$zh_file" ]; then
-              MISSING_ZH="$MISSING_ZH  $zh_file"
-            fi
-          done
-          if [ -n "$MISSING_ZH" ]; then
-            echo "WARNING: Missing zh translations:"
-            echo "$MISSING_ZH"
-          fi
-          echo "i18n pairing check done."
 
       - name: Build site
         run: pnpm build

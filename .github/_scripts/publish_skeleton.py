@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed skeleton status JSON files for every recipe in models/en/.
+"""Seed skeleton status JSON files for every recipe in models/<provider>/.
 
 Run by .github/workflows/publish-status.yml as the first step of the
 "Build status JSON files" stage. Idempotent: existing real records are
@@ -79,7 +79,10 @@ def main():
     HEAD_SHA = os.environ.get('HEAD_SHA', '')
     REPO = os.environ.get('REPO', '')
     status_dir = os.environ.get('STATUS_DIR', 'public/status')
-    recipes_root = os.environ.get('RECIPES_ROOT', 'models/en')
+    recipes_root = os.environ.get('RECIPES_ROOT', 'models')
+
+    # Exclude non-recipe paths
+    EXCLUDE_DIRS = {'en', 'zh', 'en_old', 'zh_old', '__pycache__'}
 
     if not HEAD_SHA or not REPO:
         print('::warning::HEAD_SHA and REPO env vars are required', file=sys.stderr)
@@ -91,9 +94,14 @@ def main():
     skipped_existing = 0
     cleaned_mock = 0
 
-    for root, _, files in os.walk(recipes_root):
+    for root, dirs, files in os.walk(recipes_root):
+        # Skip non-recipe directories (old i18n dirs, etc.)
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
         for name in sorted(files):
             if not (name.endswith('.yaml') or name.endswith('.yml')):
+                continue
+            # Skip cache/config files at models/ root
+            if name.startswith('_'):
                 continue
             path = os.path.join(root, name)
             try:
@@ -104,7 +112,10 @@ def main():
             if not isinstance(data, dict):
                 continue
 
-            slug = name.rsplit('.', 1)[0]
+            # Slug = provider/filename (unique even if filenames collide across providers)
+            provider = os.path.basename(os.path.dirname(path))
+            basename = name.rsplit('.', 1)[0]
+            slug = f"{provider}/{basename}" if provider and provider != 'models' else basename
             hw = (data.get('meta') or {}).get('hardware') or {}
             a2 = hw.get('atlas_800_a2', None)
             recipe_path_rel = path

@@ -24,7 +24,7 @@
 #     under us between fetch and push.
 #
 # Why a skeleton step?
-#   - Every recipe in models/en/ gets a status JSON on first publish. Recipes
+#   - Every recipe in models/<provider>/ gets a status JSON on first publish. Recipes
 #     with `meta.hardware.atlas_800_a2: unsupported` are seeded with a
 #     `status: "skip"` nightly record so the badge renders a gray "not run"
 #     pill instead of HTTP 404. This replaces the dev-time mock fixtures that
