@@ -4,7 +4,7 @@ Community-maintained deployment recipes for running LLMs on Ascend NPUs with [vl
 
 Pick a model, choose your hardware, copy the `vllm serve` command and run. Covers Atlas 800 A2 / A3 and other Ascend NPU hardware.
 
-🌐 **Live site**: <https://vllm-ascend.github.io/vllm-ascend-recipes/>
+🌐 **Live site**: <https://monkeyLoveding.github.io/vllm-ascend-recipes/>
 
 ## Features
 
