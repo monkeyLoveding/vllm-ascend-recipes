@@ -30,14 +30,16 @@ function parseRecipe(filePath) {
   // Derive HF identity from file path: models/<org>/<repo>.yaml
   const rel = path.relative(MODELS_DIR, filePath);
   const parts = rel.split(path.sep);
-  if (parts.length >= 2) {
-    raw.hf_org = parts[0];
-    raw.hf_repo = parts[parts.length - 1].replace(/\.(yaml|yml)$/, "");
-    raw.hf_id = `${raw.hf_org}/${raw.hf_repo}`;
-    // Attach HF release date (ISO string) from build-time manifest
-    const dates = loadHfDates();
-    raw.hf_released = dates[raw.hf_id] || null;
+  if (parts.length < 2) {
+    // Skip non-recipe files at models/ root (e.g. _cache_paths.yaml)
+    return null;
   }
+  raw.hf_org = parts[0];
+  raw.hf_repo = parts[parts.length - 1].replace(/\.(yaml|yml)$/, "");
+  raw.hf_id = `${raw.hf_org}/${raw.hf_repo}`;
+  // Attach HF release date (ISO string) from build-time manifest
+  const dates = loadHfDates();
+  raw.hf_released = dates[raw.hf_id] || null;
   return raw;
 }
 
@@ -59,6 +61,7 @@ export function getAllRecipes() {
   const files = findYamlFiles(MODELS_DIR);
   cache = files
     .map(parseRecipe)
+    .filter(Boolean)
     .sort((a, b) => {
       const da = new Date(a.meta.date_updated);
       const db = new Date(b.meta.date_updated);
