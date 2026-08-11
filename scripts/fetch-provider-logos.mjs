@@ -25,11 +25,18 @@ const HARDWARE_LOGOS = {
   Intel: { logo: "/providers/intel.png" },
 };
 
+// Provider key → HF org name (when they differ). The PROVIDERS map uses keys
+// that may not be valid HF org names (e.g. "THUDM" → HF org is "thudm").
+const HF_ORG_OVERRIDE = {
+  THUDM: "thudm",
+};
+
 const OUT = "public/providers";
 fs.mkdirSync(OUT, { recursive: true });
 
 async function fetchOrgAvatarUrl(org) {
-  const res = await fetch(`https://huggingface.co/${org}`, {
+  const hfOrg = HF_ORG_OVERRIDE[org] || org;
+  const res = await fetch(`https://huggingface.co/${hfOrg}`, {
     headers: { "User-Agent": "vllm-recipes-build/1.0" },
   });
   const html = await res.text();

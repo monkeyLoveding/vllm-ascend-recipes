@@ -8,6 +8,10 @@
  *
  * Extensions (png vs jpeg) match what HF serves for each org.
  */
+
+// Must match next.config.mjs basePath
+const BASE_PATH = "/vllm-ascend-recipes";
+
 export const PROVIDERS = {
   "deepseek-ai":     { display_name: "DeepSeek",                logo: "/providers/deepseek-ai.png" },
   "Qwen":            { display_name: "Qwen",                    logo: "/providers/Qwen.png" },
@@ -52,7 +56,8 @@ export const PROVIDERS = {
 };
 
 export function getProviderLogo(hfOrg) {
-  return PROVIDERS[hfOrg]?.logo || null;
+  const logo = PROVIDERS[hfOrg]?.logo;
+  return logo ? BASE_PATH + logo : null;
 }
 
 // Monochrome logos (e.g. OpenAI's pure-black mark) disappear on dark backgrounds.
