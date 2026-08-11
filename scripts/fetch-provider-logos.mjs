@@ -26,9 +26,9 @@ const HARDWARE_LOGOS = {
 };
 
 // Provider key → HF org name (when they differ). The PROVIDERS map uses keys
-// that may not be valid HF org names (e.g. "THUDM" → HF org is "thudm").
+// that may not be valid HF org names (e.g. "THUDM" → use "zai-org" avatar).
 const HF_ORG_OVERRIDE = {
-  THUDM: "thudm",
+  THUDM: "zai-org",
 };
 
 const OUT = "public/providers";
