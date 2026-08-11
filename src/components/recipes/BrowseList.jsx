@@ -4,7 +4,7 @@ import { useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Layers, Cpu, X, ArrowDownUp, Type, Eye, Sparkles, Hash, SlidersHorizontal, ChevronDown } from "lucide-react";
-import { getProviderLogo, getProviderLogoClass, getProviderDisplayName } from "@/lib/providers";
+import { getProviderLogo, getProviderLogoClass, getProviderDisplayName, assetPath } from "@/lib/providers";
 import { searchRecipes } from "@/lib/search";
 
 // Per-row decorations: icon (tasks/arch) or colored dot (precision/hardware).
@@ -72,7 +72,7 @@ const PRECISION_OPTIONS = ["bf16", "fp8", "fp4", "nvfp4", "mxfp4", "int4", "int8
 const HW_BRANDS = [
   {
     name: "NVIDIA",
-    logo: "/providers/nvidia.png",
+    logo: assetPath("/providers/nvidia.png"),
     items: [
       { id: "h100", label: "H100" },
       { id: "h200", label: "H200" },
@@ -85,7 +85,7 @@ const HW_BRANDS = [
   },
   {
     name: "AMD",
-    logo: "/providers/amd.png",
+    logo: assetPath("/providers/amd.png"),
     items: [
       { id: "mi300x", label: "MI300X" },
       { id: "mi325x", label: "MI325X" },
@@ -94,7 +94,7 @@ const HW_BRANDS = [
   },
   {
     name: "Google",
-    logo: "/providers/Google.png",
+    logo: assetPath("/providers/Google.png"),
     items: [
       { id: "trillium", label: "TPU v6e" },
       { id: "ironwood", label: "TPU v7" },
@@ -102,7 +102,7 @@ const HW_BRANDS = [
   },
   {
     name: "Intel",
-    logo: "/providers/intel.png",
+    logo: assetPath("/providers/intel.png"),
     items: [
       { id: "xeon6", label: "Xeon 6" },
       { id: "xeon5", label: "Xeon 5" },

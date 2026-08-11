@@ -55,6 +55,10 @@ export const PROVIDERS = {
   "thudm":          { display_name: "GLM (THUDM)",              logo: "/providers/THUDM.png" },
 };
 
+export function assetPath(p) {
+  return BASE_PATH + p;
+}
+
 export function getProviderLogo(hfOrg) {
   const logo = PROVIDERS[hfOrg]?.logo;
   return logo ? BASE_PATH + logo : null;
