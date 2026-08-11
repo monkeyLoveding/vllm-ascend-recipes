@@ -51,8 +51,8 @@ export const PROVIDERS = {
   "RedHatAI":        { display_name: "Red Hat AI",                    logo: "/providers/RedHatAI.png" },
   "mindlab-research":{ display_name: "MindLab Research",               logo: "/providers/mindlab-research.png" },
   // ── Ascend ecosystem ──
-  "THUDM":          { display_name: "GLM (THUDM)",              logo: "/providers/THUDM.svg" },
-  "thudm":          { display_name: "GLM (THUDM)",              logo: "/providers/THUDM.svg" },
+  "THUDM":          { display_name: "GLM (THUDM)" },
+  "thudm":          { display_name: "GLM (THUDM)" },
 };
 
 export function assetPath(p) {
