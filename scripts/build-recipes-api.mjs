@@ -714,6 +714,9 @@ for (const file of findYamlFiles(modelsDir)) {
     hfOrg = parts[0];
     hfRepo = parts[parts.length - 1].replace(/\.(yaml|yml)$/, "");
     r.hf_id = `${hfOrg}/${hfRepo}`;
+  } else {
+    // Skip non-recipe files at models/ root (e.g. _cache_paths.yaml)
+    continue;
   }
   // Replace the raw `model.install` config with the synthesized commands so
   // JSON consumers see the rendered one-liners (pip + docker) plus any
