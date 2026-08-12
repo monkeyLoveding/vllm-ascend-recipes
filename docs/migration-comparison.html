@@ -413,7 +413,7 @@ hardware_overrides:
   <tr><td>构建命令</td><td><code>astro build</code></td><td><code>next build</code> + <code>output: 'export'</code></td></tr>
   <tr><td>样式</td><td>Tailwind v3</td><td>Tailwind v4 + shadcn/ui 组件</td></tr>
   <tr><td>数据加载</td><td>构建时 <code>fs.readFileSync</code> 读取 YAML</td><td>相同（<code>src/lib/recipes.js</code>）</td></tr>
-  <tr><td>部署</td><td>Netlify + PR preview</td><td>GitHub Pages（<code>actions/deploy-pages@v4</code>）</td></tr>
+  <tr><td>部署</td><td>GitHub Pages（<code>actions/deploy-pages@v4</code>）</td><td>GitHub Pages（<code>actions/deploy-pages@v4</code>）— 相同</td></tr>
   <tr><td>i18n 渲染</td><td>独立 <code>models/en/</code>/<code>models/zh/</code> 文件分别渲染</td><td>单文件 → 前端语言切换读取 <code>guide</code>/<code>guide_zh</code></td></tr>
   <tr><td>静态导出</td><td>N/A（Astro 默认静态）</td><td><code>output: 'export'</code> → <code>out/</code> 目录</td></tr>
   <tr><td>basePath</td><td>N/A</td><td><code>/vllm-ascend-recipes</code>（GitHub Pages 子路径）</td></tr>
