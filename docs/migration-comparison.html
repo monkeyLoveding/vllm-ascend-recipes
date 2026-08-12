@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vllm-ascend-recipes 迁移对比 — 旧格式 vs 新格式</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --code-bg: #f3f4f6;
+    --warn-bg: #fef3c7;
+    --warn-text: #92400e;
+    --green-bg: #d1fae5;
+    --green-text: #065f46;
+    --red-bg: #fee2e2;
+    --red-text: #991b1b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.35rem; margin: 2rem 0 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: var(--accent); }
+  p, li { margin-bottom: 0.5rem; }
+  ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th, td { border: 1px solid var(--border); padding: 0.6rem 0.8rem; text-align: left; vertical-align: top; }
+  th { background: var(--accent-light); font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fafafa; }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.85em;
+  }
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1rem 1.2rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0.75rem 0 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15em 0.6em;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .badge-old { background: var(--red-bg); color: var(--red-text); }
+  .badge-new { background: var(--green-bg); color: var(--green-text); }
+  .badge-warn { background: var(--warn-bg); color: var(--warn-text); }
+  .note {
+    background: var(--warn-bg);
+    border-left: 4px solid #f59e0b;
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+  .note strong { color: var(--warn-text); }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { padding: 0.35rem 0; }
+  .checklist li::before { content: '☐ '; color: var(--muted); margin-right: 0.4rem; }
+  .checklist li.done::before { content: '☑ '; color: var(--green-text); }
+  .toc { background: var(--code-bg); border-radius: 8px; padding: 1rem 1.5rem; margin: 1rem 0 2rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .arch-diagram {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    font-family: monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 768px) {
+    .side-by-side { grid-template-columns: 1fr; }
+    body { padding: 1rem; }
+  }
+  .side-by-side > div {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .side-by-side .old { border-left: 4px solid #ef4444; }
+  .side-by-side .new { border-left: 4px solid #22c55e; }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>vllm-ascend-recipes 迁移对比文档</h1>
+<p style="color:var(--muted)">旧格式（Astro + scenarios）→ 新格式（Next.js + 结构化 YAML）· 2026-08-12</p>
+
+<!-- ── TOC ── -->
+<nav class="toc">
+<strong>目录</strong>
+<ol>
+  <li><a href="#yaml">YAML 数据格式对比</a></li>
+  <li><a href="#ci">CI 验证流程对比</a></li>
+  <li><a href="#verify-script">verify-recipe.sh 对比</a></li>
+  <li><a href="#rendering">站点渲染对比</a></li>
+  <li><a href="#architecture">架构全景图</a></li>
+  <li><a href="#checklist">迁移检查清单</a></li>
+  <li><a href="#pitfalls">常见坑点</a></li>
+</ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="yaml">1. YAML 数据格式对比</h2>
+
+<h3>1.1 文件组织</h3>
+<div class="side-by-side">
+  <div class="old">
+    <strong><span class="badge badge-old">旧</span> 中英文分离</strong>
+    <pre>models/
+├── en/
+│   ├── Qwen/Qwen3-30B-A3B.yaml
+│   ├── THUDM/GLM-4.x.yaml
+│   └── ...
+└── zh/
+    ├── Qwen/Qwen3-30B-A3B.yaml
+    └── ...</pre>
+  </div>
+  <div class="new">
+    <strong><span class="badge badge-new">新</span> 单文件双语</strong>
+    <pre>models/
+├── qwen/
+│   ├── Qwen3-30B-A3B.yaml
+│   └── Qwen3-235B-A22B.yaml
+├── deepseek/
+│   └── DeepSeek-V4-Flash.yaml
+└── thudm/
+    ├── GLM-4.x.yaml
+    ├── GLM-5.2.yaml
+    └── GLM-5.yaml</pre>
+  </div>
+</div>
+
+<h3>1.2 核心字段映射</h3>
+<table>
+  <tr><th>功能</th><th><span class="badge badge-old">旧格式</span></th><th><span class="badge badge-new">新格式</span></th></tr>
+  <tr>
+    <td>中英文标题/描述</td>
+    <td>两个独立文件，各自 <code>meta.title</code>/<code>meta.description</code></td>
+    <td>单文件 <code>meta.title</code> + <code>meta.title_zh</code> / <code>description</code> + <code>description_zh</code></td>
+  </tr>
+  <tr>
+    <td>难度/任务类型</td>
+    <td>无</td>
+    <td><code>meta.difficulty</code> / <code>meta.tasks</code></td>
+  </tr>
+  <tr>
+    <td>启动参数</td>
+    <td>嵌入 <code>scenarios[].steps[].content</code> 的 shell 代码块</td>
+    <td><code>model.base_args</code>（结构化数组）</td>
+  </tr>
+  <tr>
+    <td>环境变量</td>
+    <td>混在 shell 代码块中的 <code>export VAR=VALUE</code></td>
+    <td><code>model.base_env</code>（结构化字典）</td>
+  </tr>
+  <tr>
+    <td>精度变体</td>
+    <td>多个 scenario 描述 W8A8/BF16/... </td>
+    <td><code>variants:</code> 字典：<code>default</code>/<code>bf16</code>/<code>w4a8</code>，每个含 <code>precision</code>, <code>vram_minimum_gb</code>, <code>extra_args</code>, <code>extra_env</code></td>
+  </tr>
+  <tr>
+    <td>功能开关</td>
+    <td><code>extra_config</code> 列表 + <code>%%CONFIG:xxx%%</code> 模板标记</td>
+    <td><code>features:</code> 命名块 + <code>opt_in_features:</code> 控制默认开关</td>
+  </tr>
+  <tr>
+    <td>硬件差异</td>
+    <td>分散在 scenario 的 NPU 字段和 shell 块中</td>
+    <td><code>hardware_overrides:</code> 集中定义，按 <code>ascend_a2</code>/<code>ascend_a3</code></td>
+  </tr>
+  <tr>
+    <td>策略兼容</td>
+    <td>隐含在 scenario 标题（单节点-多卡 / 多节点-PD分离）</td>
+    <td><code>compatible_strategies:</code> 显式列表</td>
+  </tr>
+  <tr>
+    <td>部署教程</td>
+    <td>分散在 <code>overview</code>/<code>prerequisites</code>/<code>env_setup</code>/<code>scenarios</code>/<code>verification</code>/<code>evaluation</code>/<code>tuning</code>/<code>faq</code>/<code>references</code> 等 10+ 个字段</td>
+    <td>两个 markdown 块：<code>guide:</code> (EN) + <code>guide_zh:</code> (CN)</td>
+  </tr>
+  <tr>
+    <td>权重下载</td>
+    <td><code>weight_download</code> 结构化列表（版本 × 源）</td>
+    <td>归入 <code>guide</code> markdown</td>
+  </tr>
+  <tr>
+    <td>硬件支持</td>
+    <td><code>meta.hardware</code> 两个值：<code>verified</code> / <code>unsupported</code></td>
+    <td>相同</td>
+  </tr>
+</table>
+
+<h3>1.3 YAML 示例片段对比</h3>
+<div class="side-by-side">
+  <div class="old">
+    <strong><span class="badge badge-old">旧</span> 场景式（命令嵌在 markdown 中）</strong>
+    <pre>scenarios:
+- npu: Atlas 800I A2
+  precision: W8A8
+  deployment: 单节点-多卡
+  steps:
+  - title: Start the server
+    content: |-
+      ```bash
+      export HCCL_BUFFSIZE=1024
+      export OMP_PROC_BIND=false
+      vllm serve your_model_path \
+        --tensor-parallel-size 8 \
+        --quantization ascend \
+        --trust-remote-code \
+        --enable-expert-parallel
+      ```</pre>
+  </div>
+  <div class="new">
+    <strong><span class="badge badge-new">新</span> 结构化（程序可读）</strong>
+    <pre>model:
+  base_args:
+    - "--trust-remote-code"
+    - "--enable-expert-parallel"
+  base_env:
+    HCCL_BUFFSIZE: "1024"
+    OMP_PROC_BIND: "false"
+
+features:
+  quantization_ascend:
+    args: ["--quantization", "ascend"]
+
+variants:
+  default:
+    precision: w8a8
+    vram_minimum_gb: 31
+
+hardware_overrides:
+  ascend_a2:
+    extra_args: ["--compilation-config",
+      '{"cudagraph_mode":"FULL_DECODE_ONLY"}']</pre>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="ci">2. CI 验证流程对比</h2>
+
+<table>
+  <tr><th>维度</th><th><span class="badge badge-old">旧</span></th><th><span class="badge badge-new">新</span></th></tr>
+  <tr>
+    <td>PR 触发</td>
+    <td colspan="2" style="text-align:center">相同：<code>pull_request</code> → <code>branches: [main]</code></td>
+  </tr>
+  <tr>
+    <td>变更检测</td>
+    <td><code>models/en/**</code> + <code>models/zh/**</code></td>
+    <td><code>models/**</code> — 排除 <code>_cache_paths.yaml</code></td>
+  </tr>
+  <tr>
+    <td>验证白名单</td>
+    <td><code>models/en/Qwen/</code></td>
+    <td><code>models/(qwen|Qwen)/</code></td>
+  </tr>
+  <tr>
+    <td>i18n 检查</td>
+    <td>✅ 遍历 <code>models/en/</code> 检查 <code>models/zh/</code> 是否有对应文件</td>
+    <td>❌ <strong>已删除</strong> — 中英文合并在同一 YAML</td>
+  </tr>
+  <tr>
+    <td>YAML 校验</td>
+    <td colspan="2" style="text-align:center">相同：<code>pnpm validate</code></td>
+  </tr>
+  <tr>
+    <td>前端检查</td>
+    <td><code>pnpm typecheck</code> + <code>pnpm lint</code> + <code>pnpm format:check</code></td>
+    <td>相同</td>
+  </tr>
+  <tr>
+    <td>站点构建</td>
+    <td><code>pnpm build</code>（旧 Astro）</td>
+    <td><code>pnpm build</code>（新 Next.js 静态导出）</td>
+  </tr>
+  <tr>
+    <td>Nightly 全量扫描</td>
+    <td><code>find models/en -name '*.yaml'</code></td>
+    <td><code>find models -mindepth 2 -name '*.yaml' \| grep -v '_cache_paths'</code></td>
+  </tr>
+  <tr>
+    <td>Nightly 默认列表</td>
+    <td>2 个模型</td>
+    <td>7 个模型（全部）</td>
+  </tr>
+  <tr>
+    <td>真机验证</td>
+    <td colspan="2" style="text-align:center">复用相同 <code>_recipe_verify.yml</code> 调用相同 <code>verify-recipe.sh</code></td>
+  </tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="verify-script">3. verify-recipe.sh 对比</h2>
+
+<p>这是整个迁移中<strong>改动最大</strong>的组件。旧脚本"提取 shell 命令直接执行"，新脚本"从结构化字段拼装命令"。</p>
+
+<table>
+  <tr><th>阶段</th><th><span class="badge badge-old">旧逻辑</span></th><th><span class="badge badge-new">新逻辑</span></th></tr>
+  <tr>
+    <td>1. 解析 YAML</td>
+    <td>读取 <code>scenarios[]</code>/<code>verification</code>/<code>env_setup</code> 字段</td>
+    <td>读取 <code>model</code>/<code>features</code>/<code>variants</code>/<code>hardware_overrides</code></td>
+  </tr>
+  <tr>
+    <td>2. 命令生成</td>
+    <td><code>re.search(r'```bash\n(.*?)```', content)</code> 正则提取</td>
+    <td><code>merge_args(base, features, variant, hw, smoke)</code> 程序化拼接</td>
+  </tr>
+  <tr>
+    <td>3. 环境变量</td>
+    <td>嵌入 shell 代码块的 <code>export</code> 语句</td>
+    <td><code>merge_env(base_env, feat_env, var_env, hw_env)</code> 分层合并，后覆盖前</td>
+  </tr>
+  <tr>
+    <td>4. 验证 curl</td>
+    <td>从 <code>verification</code> 字段的 <code>```bash</code> 块提取</td>
+    <td><strong>自动生成</strong>标准 <code>/v1/chat/completions</code> + <code>/v1/models</code> 请求</td>
+  </tr>
+  <tr>
+    <td>5. 场景遍历</td>
+    <td><code>for s in data.scenarios:</code></td>
+    <td><code>for var_name, var in variants.items():</code>（仅单选 <code>single_node_tp</code> 策略）</td>
+  </tr>
+  <tr>
+    <td>6. VRAM 检查</td>
+    <td>无</td>
+    <td><strong>新增</strong>：<code>vram_minimum_gb / TP &gt; NPU 容量 × 0.85</code> → 跳过</td>
+  </tr>
+  <tr>
+    <td>7. 多节点</td>
+    <td>检测到 <code>\$1</code>/<code>\$2</code> 位置参数自动跳过</td>
+    <td>仅运行 <code>single_node_tp</code>，多节点 / PD 策略不生成 scenario</td>
+  </tr>
+  <tr>
+    <td>8. Pip 安装</td>
+    <td>从 <code>env_setup.pip.content</code> 提取并执行</td>
+    <td>不再需要（vllm-ascend 预装在 runner 镜像）</td>
+  </tr>
+  <tr>
+    <td>9. 冒烟默认值</td>
+    <td>跟随 scenario 中的命令（参数各不相同）</td>
+    <td><strong>硬编码</strong>：TP=8, max-model-len=8192, max-num-seqs=4, gpu-memory-utilization=0.9</td>
+  </tr>
+  <tr>
+    <td>10. MoE 兜底</td>
+    <td>依赖 scenario 命令中已有的 <code>--enable-expert-parallel</code></td>
+    <td><strong>自动补充</strong>：<code>is_moe and '--enable-expert-parallel' not in args</code> → 插入</td>
+  </tr>
+  <tr>
+    <td>11. %%CONFIG%% 标记</td>
+    <td><code>re.sub(r'%%CONFIG:...%%', '', bash)</code></td>
+    <td>无需处理（新格式无此模板语法）</td>
+  </tr>
+  <tr>
+    <td>12. your_model_path</td>
+    <td><code>bash_content.replace('your_model_path', CACHE_PATH)</code></td>
+    <td>直接传入拼装好的参数列表</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>⚠ 关键限制：</strong>新脚本只运行 <code>single_node_tp</code> 冒烟测试。PD 分离（Mooncake）、多节点 TP/EP、PD Hybrid 等复杂部署场景<strong>不再自动化验证</strong>，需在真实多节点环境中手动测试。
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="rendering">4. 站点渲染对比</h2>
+
+<table>
+  <tr><th>维度</th><th><span class="badge badge-old">旧</span></th><th><span class="badge badge-new">新</span></th></tr>
+  <tr><td>框架</td><td>Astro + SolidJS</td><td>Next.js 15 App Router</td></tr>
+  <tr><td>页面路由</td><td><code>src/pages/[provider]/[model].astro</code></td><td><code>src/app/[org]/[repo]/page.js</code></td></tr>
+  <tr><td>构建命令</td><td><code>astro build</code></td><td><code>next build</code> + <code>output: 'export'</code></td></tr>
+  <tr><td>样式</td><td>Tailwind v3</td><td>Tailwind v4 + shadcn/ui 组件</td></tr>
+  <tr><td>数据加载</td><td>构建时 <code>fs.readFileSync</code> 读取 YAML</td><td>相同（<code>src/lib/recipes.js</code>）</td></tr>
+  <tr><td>部署</td><td>Netlify + PR preview</td><td>GitHub Pages（<code>actions/deploy-pages@v4</code>）</td></tr>
+  <tr><td>i18n 渲染</td><td>独立 <code>models/en/</code>/<code>models/zh/</code> 文件分别渲染</td><td>单文件 → 前端语言切换读取 <code>guide</code>/<code>guide_zh</code></td></tr>
+  <tr><td>静态导出</td><td>N/A（Astro 默认静态）</td><td><code>output: 'export'</code> → <code>out/</code> 目录</td></tr>
+  <tr><td>basePath</td><td>N/A</td><td><code>/vllm-ascend-recipes</code>（GitHub Pages 子路径）</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="architecture">5. 架构全景图</h2>
+
+<h3>5.1 旧架构（Astro + scenarios）</h3>
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│                    CI Pipeline (旧)                       │
+│                                                          │
+│  PR ──→ detect ──→ validate ──→ i18n check ──→ build    │
+│   │       │           │              │             │     │
+│   │   models/en/   pnpm validate  en↔zh pairing  astro  │
+│   │   models/zh/   (schema)        check          build  │
+│   │                                                     │
+│   └──→ verify-deploy (Qwen whitelist)                   │
+│            │                                            │
+│            └──→ _recipe_verify.yml                      │
+│                    │                                    │
+│                    └──→ verify-recipe.sh                │
+│                           │                             │
+│              ┌────────────┴────────────┐                │
+│              │   parse_recipe()        │                │
+│              │   regex extract:        │                │
+│              │   ```bash               │                │
+│              │     export VAR=VALUE    │                │
+│              │     vllm serve ...      │                │
+│              │   ```                   │                │
+│              │   → run as-is           │                │
+│              └─────────────────────────┘                │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│                  Data Format (旧)                        │
+│                                                          │
+│  models/en/Qwen/Qwen3-30B-A3B.yaml                      │
+│  ┌────────────────────────────────────┐                  │
+│  │ meta: { title, slug, hardware }    │                  │
+│  │ model: { model_id, architecture }  │                  │
+│  │ scenarios:                         │                  │
+│  │   - npu: Atlas 800I A2             │                  │
+│  │     steps:                         │                  │
+│  │       - content: |                 │                  │
+│  │           ```bash                  │  ← 不可程序化     │
+│  │           export X=Y               │    读取           │
+│  │           vllm serve ...           │                  │
+│  │           ```                      │                  │
+│  │ verification: |                    │                  │
+│  │   ```bash                          │                  │
+│  │   curl ...                         │                  │
+│  │   ```                              │                  │
+│  └────────────────────────────────────┘                  │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<h3>5.2 新架构（Next.js + 结构化 YAML）</h3>
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│                    CI Pipeline (新)                       │
+│                                                          │
+│  PR ──→ detect ──→ validate ──→ build                   │
+│   │       │           │             │                    │
+│   │   models/**/   pnpm validate  next build             │
+│   │   (excl.       (schema)       (static export)        │
+│   │   _cache_)                                         │
+│   │                                                     │
+│   └──→ verify-deploy (Qwen whitelist)                   │
+│            │                                            │
+│            └──→ _recipe_verify.yml                      │
+│                    │                                    │
+│                    └──→ verify-recipe.sh (NEW)          │
+│                           │                             │
+│              ┌────────────┴────────────┐                │
+│              │   parse_recipe()        │                │
+│              │   structured merge:     │                │
+│              │   base_args             │                │
+│              │   + features[non-opt]   │                │
+│              │   + variant.extra_args  │                │
+│              │   + hw_overrides.extra  │                │
+│              │   + smoke defaults      │                │
+│              │   = vllm serve command  │                │
+│              └─────────────────────────┘                │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│                  Data Format (新)                        │
+│                                                          │
+│  models/qwen/Qwen3-30B-A3B.yaml                         │
+│  ┌────────────────────────────────────┐                  │
+│  │ meta: { title, title_zh,          │                  │
+│  │         difficulty, tasks,        │                  │
+│  │         performance_headline,     │                  │
+│  │         hardware }                │                  │
+│  │ model: {                          │                  │
+│  │   base_args: [--trust-remote, ..] │  ← 程序可读       │
+│  │   base_env: { HCCL_BUFFSIZE: .. } │    数组/字典      │
+│  │ }                                 │                  │
+│  │ features:                         │                  │
+│  │   quantization_ascend:            │                  │
+│  │     args: [--quantization,ascend] │  ← 命名功能块     │
+│  │ opt_in_features: [spec_decoding]  │  ← 默认OFF列表    │
+│  │ variants:                         │                  │
+│  │   default:                        │                  │
+│  │     precision: w8a8               │                  │
+│  │     vram_minimum_gb: 31           │  ← VRAM准入       │
+│  │     extra_args: [...]             │                  │
+│  │ hardware_overrides:               │                  │
+│  │   ascend_a2:                      │  ← 集中管理       │
+│  │     extra_args: [...]             │                  │
+│  │     extra_env: {...}              │                  │
+│  │ guide: |   (EN markdown)          │  ← 人类可读       │
+│  │ guide_zh: | (CN markdown)         │    教程           │
+│  └────────────────────────────────────┘                  │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="checklist">6. 迁移检查清单</h2>
+
+<ul class="checklist">
+  <li class="done">YAML 格式转换：7 个模型全部完成（DeepSeek + Qwen ×3 + THUDM ×3）</li>
+  <li class="done">scripts/verify-recipe.sh：从正则提取改为结构化拼装</li>
+  <li class="done">models/_cache_paths.yaml：新建权重别名映射</li>
+  <li class="done">pr-recipe-verify.yml：路径 models/en/ → models/，移除 i18n 检查</li>
+  <li class="done">nightly-recipe-verify.yml：路径更新，白名单扩展到全部 7 模型</li>
+  <li class="done">publish_skeleton.py：路径 models/en → models，排除 _cache_paths</li>
+  <li class="done">build-recipes-api.mjs：跳过 models/ 根目录下的非 recipe 文件</li>
+  <li class="done">src/lib/recipes.js：跳过 parts.length &lt; 2 的文件，filter(Boolean)</li>
+  <li class="done">providers.js：THUDM logo 走 CSS fallback</li>
+  <li class="done">旧文件清理：删除 models_old_en/、models_old_zh/、src_astro/、public/生成物</li>
+  <li>多节点 PD 分离验证：<span class="badge badge-warn">需手动测试</span>（verify-recipe.sh 不再支持）</li>
+  <li>大模型冒烟参数：<span class="badge badge-warn">GLM-5.2 (753B) / GLM-5 (744B) 可能需调整 TP/max-model-len</span></li>
+  <li>新模型加入：确保 models/_cache_paths.yaml 有对应条目</li>
+  <li>提交 PR 到上游 recipes 仓库</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="pitfalls">7. 常见坑点</h2>
+
+<table>
+  <tr><th>#</th><th>坑点</th><th>说明</th><th>解决</th></tr>
+  <tr>
+    <td>1</td>
+    <td>YAML 转换不可全自动</td>
+    <td>旧 scenario 的 shell 代码块包含大量隐式知识（TP 大小、EP 开关、编译 flag），必须人工提取到结构化字段</td>
+    <td>逐个模型审查，确保 base_args/features/hardware_overrides 覆盖所有必需参数</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>VRAM 值不准确</td>
+    <td><code>vram_minimum_gb</code> 是 CI 验证的准入条件，算错会导致真机测试被跳过或 OOM</td>
+    <td>按公式 <code>params × bytes_per_param × 1.2</code> 计算，对混合精度量化使用真实权重文件大小</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>冒烟参数对超大模型不适用</td>
+    <td>TP=8 + max-model-len=8192 对 GLM-5.2 (753B) 可能 OOM，每个 NPU 需装 ~94GB（>64GB A2 容量）</td>
+    <td>对于 vram_per_npu > 64G 的 variant，脚本自动跳过</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>_cache_paths.yaml 遗漏</td>
+    <td>新增模型不加条目 → CI 跳过（"未提前下载权重"）</td>
+    <td>每次新增模型同步更新此文件</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>features 默认开关搞反</td>
+    <td>不在 <code>opt_in_features</code> 的功能被视为<strong>默认开启</strong>，会拼入 serve 命令</td>
+    <td>确保默认开启的功能在所有目标硬件上都可用</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>hardware_overrides key 不匹配</td>
+    <td>脚本使用的 key 是 <code>atlas_800_a2</code>/<code>atlas_800_a3</code>，YAML 中必须一致</td>
+    <td>保持 key 名称与 RECIPE_HW_KEY 环境变量一致</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>basePath 不一致</td>
+    <td><code>next.config.mjs</code> 的 <code>basePath</code> 必须与 <code>providers.js</code> 的 <code>BASE_PATH</code> 常量同步</td>
+    <td>改仓库名时两处一起改</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>models/ 根目录文件被误解析</td>
+    <td><code>_cache_paths.yaml</code> 等文件被 YAML 扫描器误当作 recipe 加载</td>
+    <td>在 <code>build-recipes-api.mjs</code> 和 <code>recipes.js</code> 中均添加 <code>parts.length &lt; 2 → continue</code> 保护</td>
+  </tr>
+</table>
+
+<footer>
+  Generated 2026-08-12 · vllm-ascend-recipes migration documentation
+</footer>
+
+</body>
+</html>
