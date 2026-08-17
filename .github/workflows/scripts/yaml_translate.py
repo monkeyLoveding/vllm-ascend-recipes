@@ -55,7 +55,7 @@ CRITICAL RULES — violations will cause the output to be rejected:
 
 --- WHAT TO PRESERVE VERBATIM (do NOT translate or alter) ---
 3. Fenced code blocks (```...```) and inline `code`.
-4. Placeholders: {{max_num_seqs}}, {{max_model_len}}, etc.
+4. Placeholders: {max_num_seqs}, {max_model_len}, etc.
 5. Config markers: %%CONFIG:key%% ... %%/CONFIG:key%%.
 6. URLs, email addresses, file paths.
 7. Model ids (org/name), command-line flags, shell commands, env vars, docker
@@ -78,7 +78,7 @@ CRITICAL RULES — violations will cause the output to be rejected:
 14. Never invent content; never add or remove information.
 
 Input JSON:
-{content}"""
+<CONTENT>"""
 
 
 class YAMLTranslator:
@@ -94,7 +94,7 @@ class YAMLTranslator:
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": TRANSLATION_PROMPT.format(content=content)},
+                {"role": "user", "content": TRANSLATION_PROMPT.replace("<CONTENT>", content)},
             ],
             max_tokens=8000,
             temperature=0.3,
@@ -140,22 +140,25 @@ class YAMLTranslator:
     async def _translate_chunk(self, chunk: dict[str, str], idx: int, total: int) -> dict[str, str]:
         info = f"chunk {idx + 1}/{total}"
         payload = json.dumps(chunk, ensure_ascii=False, indent=2)
+        last_err = "unknown"
         for attempt in range(3):
             try:
                 raw = await self._call_api(payload, chunk_info=info)
                 if raw is None:
+                    last_err = "empty or non-JSON response"
                     continue
                 data = json.loads(raw)
                 if not isinstance(data, dict):
+                    last_err = "response is not a JSON object"
                     continue
                 # Only accept keys that match the input exactly.
                 out = {k: str(data[k]) for k in chunk if k in data and data[k]}
                 return out
-            except Exception:
-                pass
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
             if attempt < 2:
                 await asyncio.sleep(2)
-        print(f"\n    Chunk {idx + 1}/{total} failed after 3 attempts", flush=True)
+        print(f"\n    Chunk {idx + 1}/{total} failed after 3 attempts — {last_err}", flush=True)
         return {}
 
     async def translate_entries(self, entries: dict[str, str]) -> dict[str, str]:
