@@ -28,18 +28,27 @@ import translate_common as tc
 
 
 def process_file(en_path: Path, translated: dict[str, str], patterns, write_zh: bool) -> dict:
-    """Apply translations to one recipe. Returns the new memory dict for it."""
-    data = tc.load_yaml_rt(en_path)
-    entries = tc.extract_translatable(data, patterns)
+    """Apply translations to one recipe. Returns the new memory dict for it.
+
+    The zh mirror is rebuilt by *surgical text replacement*: we load the existing
+    zh file (or the en file when no zh exists yet), locate each translatable
+    scalar by its character span, and replace only the strings that changed.
+    Non-whitelisted fields (``source``, ``url``, model ids, …) are never touched,
+    and list indentation / comments stay byte-identical.
+    """
+    en_data = tc.load_yaml_safe(en_path)
+    entries = tc.extract_translatable(en_data, patterns)
 
     zh_path = tc.zh_path_for(en_path)
-    zh_data = tc.load_yaml_safe(zh_path) if zh_path.exists() else None
+    zh_exists = zh_path.exists()
+    base_raw = zh_path.read_text(encoding="utf-8") if zh_exists else en_path.read_text(encoding="utf-8")
+    zh_data = tc.load_yaml_safe(zh_path) if zh_exists else en_data
     zh_leaves = {}
-    if zh_data is not None:
-        for p, v in tc.iter_leaves(zh_data):
-            zh_leaves[tc.path_to_str(p)] = v
+    for p, v in tc.iter_leaves(zh_data):
+        zh_leaves[tc.path_to_str(p)] = v
 
     memory: dict[str, dict[str, str]] = {}
+    replacements: dict[str, str] = {}
     integrity_failures = 0
 
     for path, path_str, en in entries:
@@ -66,12 +75,17 @@ def process_file(en_path: Path, translated: dict[str, str], patterns, write_zh: 
 
         memory[path_str] = {"en": en, "zh": zh}
 
-        if write_zh and zh != en:
-            tc.set_path(data, path, zh)
+        base_val = zh_leaves.get(path_str) if zh_exists else en
+        if write_zh and zh != base_val:
+            replacements[path_str] = zh
 
-    if write_zh:
-        tc.dump_yaml_rt(data, zh_path)
-        print(f"  zh: {zh_path.relative_to(tc.REPO_ROOT)} ({len(entries)} leaves, {integrity_failures} integrity fallbacks)")
+    if write_zh and replacements:
+        new_raw, missing = tc.replace_scalars(base_raw, replacements)
+        if missing:
+            print(f"  WARN: {en_path.name} — {len(missing)} path(s) not in zh base, skipped: {missing[:3]}")
+        zh_path.parent.mkdir(parents=True, exist_ok=True)
+        zh_path.write_text(new_raw, encoding="utf-8")
+        print(f"  zh: {zh_path.relative_to(tc.REPO_ROOT)} ({len(replacements)} replaced, {integrity_failures} integrity fallbacks)")
 
     return memory
 

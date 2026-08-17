@@ -22,6 +22,7 @@ import json
 import re
 from pathlib import Path
 
+import yaml as _pyyaml  # PyYAML — used for scalar character offsets (surgical replace)
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import LiteralScalarString
 
@@ -222,3 +223,103 @@ def check_integrity(en: str, zh: str) -> tuple[bool, list[str]]:
     if en.count("```") != zh.count("```"):
         missing.append("<fence-count-mismatch>")
     return (not missing, missing)
+
+
+# --- Surgical scalar replacement -------------------------------------------
+# Instead of re-serialising the whole YAML tree (which would re-indent lists and
+# clobber non-whitelisted localisations like `source: 魔乐社区` or zh-cn URLs),
+# we locate each scalar by its character span and replace only its value. This
+# keeps the file byte-identical everywhere except the translated strings.
+
+def scalar_spans(text: str) -> dict[str, tuple[int, int, str | None, str]]:
+    """Map path_str → (start, end, style, value) for every string scalar leaf."""
+    try:
+        node = _pyyaml.compose(text)
+    except Exception:
+        return {}
+    spans: dict[str, tuple[int, int, str | None, str]] = {}
+
+    def walk(n, path=()):
+        if isinstance(n, _pyyaml.MappingNode):
+            for k, v in n.value:
+                walk(v, path + (("k", k.value),))
+        elif isinstance(n, _pyyaml.SequenceNode):
+            for i, v in enumerate(n.value):
+                walk(v, path + (("i", i),))
+        elif isinstance(n, _pyyaml.ScalarNode):
+            if isinstance(n.value, str):
+                spans[path_to_str(path)] = (n.start_mark.index, n.end_mark.index, n.style, n.value)
+
+    walk(node)
+    return spans
+
+
+def _needs_quoting(value: str) -> bool:
+    if value != value.strip():
+        return True
+    if value.startswith((" ", "- ", "? ", ": ", "#", "{", "[", "&", "*", "!", "|", ">", "%", "@", "`")):
+        return True
+    if ": " in value or " #" in value or value.endswith(":"):
+        return True
+    return False
+
+
+def _serialize_scalar(value: str, style: str | None, raw: str, start: int, end: int) -> str:
+    """Re-serialise a scalar value in-place, matching the original style/indent."""
+    if style in ("|", ">"):
+        indicator_len = 2 if (start + 1 < len(raw) and raw[start + 1] in "-+") else 1
+        indicator = raw[start : start + indicator_len]
+        # Base indentation = indent of the first non-blank content line.
+        p = start + indicator_len
+        while p < len(raw) and raw[p] != "\n":
+            p += 1
+        p += 1
+        indent = 0
+        while p < end:
+            ls = p
+            while p < end and raw[p] != "\n":
+                p += 1
+            if raw[ls:p].strip():
+                indent = len(raw[ls:p]) - len(raw[ls:p].lstrip(" "))
+                break
+            p += 1
+        # Preserve the exact number of trailing newlines the block scalar had in
+        # the source (a terminating newline plus any explicit blank lines).
+        trailing = 0
+        i = end - 1
+        while i >= start and raw[i] == "\n":
+            trailing += 1
+            i -= 1
+
+        lines = value.rstrip("\n").split("\n")
+        body = "\n".join((" " * indent + ln) if ln else "" for ln in lines)
+        # The scalar's char span includes the newline that terminates the block;
+        # re-emit it so the following key stays on its own line.
+        return indicator + "\n" + body + ("\n" * trailing)
+    if style == '"':
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    if style == "'":
+        return "'" + value.replace("'", "''") + "'"
+    if _needs_quoting(value):
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return value
+
+
+def replace_scalars(raw_text: str, replacements: dict[str, str]) -> tuple[str, list[str]]:
+    """In-place replace scalar values. Returns (new_text, missing_paths)."""
+    spans = scalar_spans(raw_text)
+    missing: list[str] = []
+    edits: list[tuple[int, int, str]] = []
+    for path_str, new_val in replacements.items():
+        if path_str not in spans:
+            missing.append(path_str)
+            continue
+        start, end, style, old_val = spans[path_str]
+        if new_val == old_val:
+            continue
+        edits.append((start, end, _serialize_scalar(new_val, style, raw_text, start, end)))
+    edits.sort(key=lambda e: e[0], reverse=True)
+    out = raw_text
+    for start, end, repl in edits:
+        out = out[:start] + repl + out[end:]
+    return out, missing
