@@ -12,11 +12,11 @@ meta:
 model:
   model_id: "zai-org/GLM-5.2"
   performance_model_names:
-    - "GLM-5.2"
+  - "GLM-5.2"
   min_vllm_version: "0.22.1rc"
   architecture: moe
   parameter_count: "753B"
-  active_parameters: null
+  active_parameters:
   context_length: 131072
   modality: text
 
@@ -682,7 +682,7 @@ faq: |-
   使用共置 4 节点配置，dp4 tp8，`--max-model-len 200000`。
 references:
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/GLM5.2.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
 - title: ModelScope 模型下载（GLM-5.2 BF16）
   url: https://www.modelscope.cn/models/ZhipuAI/GLM-5.2
 - title: ModelScope 模型下载（GLM-5.2 W8A8）

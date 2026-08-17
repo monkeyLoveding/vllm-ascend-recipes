@@ -12,7 +12,7 @@ meta:
 model:
   model_id: "Qwen/Qwen3-235B-A22B"
   performance_model_names:
-    - "Qwen3-235B-A22B"
+  - "Qwen3-235B-A22B"
   min_vllm_version: "0.8.4rc2"
   architecture: moe
   parameter_count: "235B"
@@ -43,7 +43,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Qwen/Qwen3-235B-A22B
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -58,7 +58,7 @@ weight_download:
       ```
 - weight_version: W8A8（预量化）
   sources:
-  - source: 魔乐社区
+  - source: Modelers
     url: https://modelers.cn/models/Modelers_Park/Qwen3-235B-A22B-w8a8
     command: |-
       ```bash
@@ -1020,11 +1020,11 @@ faq: |-
   Context Parallelism (CP) 将单个请求的 KV 缓存拆分到多个 NPU 上，适用于单节点长上下文场景。PD Disaggregation 将 Prefill 和 Decode 分离到不同节点，适用于高并发请求的高吞吐服务。
 references:
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/Qwen3-235B-A22B.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3-235B-A22B.html
 - title: ModelScope 模型下载
   url: https://www.modelscope.cn/models/Qwen/Qwen3-235B-A22B
 - title: PD 分离指南 (Mooncake)
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/features/pd_disaggregation_mooncake_multi_node.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/features/pd_disaggregation_mooncake_multi_node.html
 - title: Proxy 脚本
   url: https://github.com/vllm-project/vllm-ascend/blob/main/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py
 - title: vllm-ascend GitHub

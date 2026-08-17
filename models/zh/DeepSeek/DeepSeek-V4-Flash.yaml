@@ -7,9 +7,9 @@ meta:
   date_updated: 2026-08-03
   difficulty: advanced
   tasks:
-    - text
+  - text
   related_recipes:
-    - "deepseek-ai/DeepSeek-V3.2"
+  - "deepseek-ai/DeepSeek-V3.2"
   performance_headline: "紧凑型 284B/13B V4 变体 — 单节点 1M 上下文服务，支持 W8A8 权重和 MTP"
   hardware:
     atlas_800_a3: verified
@@ -18,7 +18,7 @@ meta:
 model:
   model_id: "deepseek-ai/DeepSeek-V4-Flash"
   performance_model_names:
-    - "DeepSeek-V4-Flash"
+  - "DeepSeek-V4-Flash"
   min_vllm_version: "v0.23.0rc1"
   architecture: moe
   parameter_count: "284B"
@@ -26,21 +26,21 @@ model:
   context_length: 1048576
   modality: text
   base_args:
-    - "--trust-remote-code"
-    - "--tokenizer-mode"
-    - "deepseek_v4"
-    - "--tool-call-parser"
-    - "deepseek_v4"
-    - "--enable-auto-tool-choice"
-    - "--reasoning-parser"
-    - "deepseek_v4"
-    - "--enable-expert-parallel"
-    - "--safetensors-load-strategy"
-    - "prefetch"
-    - "--block-size"
-    - "128"
-    - "--quantization"
-    - "ascend"
+  - "--trust-remote-code"
+  - "--tokenizer-mode"
+  - "deepseek_v4"
+  - "--tool-call-parser"
+  - "deepseek_v4"
+  - "--enable-auto-tool-choice"
+  - "--reasoning-parser"
+  - "deepseek_v4"
+  - "--enable-expert-parallel"
+  - "--safetensors-load-strategy"
+  - "prefetch"
+  - "--block-size"
+  - "128"
+  - "--quantization"
+  - "ascend"
   base_env:
     HCCL_OP_EXPANSION_MODE: "AIV"
     HCCL_BUFFSIZE: "1024"
@@ -54,13 +54,15 @@ model:
     atlas_800_a3: "quay.io/ascend/vllm-ascend:v0.23.0rc1-a3"
   nightly_required: false
   install:
-    # Ascend 推荐 Docker 方式;pip 需源码编译,不提供官方 wheel,隐藏 pip 标签。
+    # Ascend recommends Docker; pip requires source build (no official wheel), so the pip tab is hidden.
     pip: false
     docker:
       command: "docker run --rm --net=host --shm-size=512g -v /root/.cache/modelscope:/root/.cache/modelscope --device /dev/davinci0 --device /dev/davinci1 --device /dev/davinci2 --device /dev/davinci3 --device /dev/davinci4 --device /dev/davinci5 --device /dev/davinci6 --device /dev/davinci7 -it quay.io/ascend/vllm-ascend:v0.23.0rc1 bash"
       note: "Ascend 官方镜像;权重目录(/root/.cache/modelscope)已挂载进容器;设备/驱动挂载见 env_setup.container。"
 
-# —— 特性(上游字段):布尔开关统一放这里,页面 Config 面板直接读 ——
+# Upstream alignment: features / variants / strategies / hardware_overrides / guide
+# (shape mirrors vllm-project/recipes; scenarios/config_params below remain our
+# CI-execution extension and are ignored by the upstream builder)
 features:
   expert_parallel:
     description: "跨 DP rank 的 MoE 专家并行"
@@ -107,12 +109,11 @@ features:
     args: ["--additional-config", '{"ascend_compilation_config": {"enable_npugraph_ex": true, "enable_static_kernel": false}}']
 
 opt_in_features:
-  - prefix_caching
-  - cpu_binding
-  - multistream_overlap
-  - npugraph_ex
+- prefix_caching
+- cpu_binding
+- multistream_overlap
+- npugraph_ex
 
-# —— 上游对齐:variants / strategies / hardware_overrides / guide ——
 variants:
   default:
     precision: W8A8
@@ -127,38 +128,38 @@ variants:
     supported_hardware: [atlas_800_a2, atlas_800_a3]
 
 compatible_strategies:
-  - single_node_A2
-  - single_node_A3
-  - pd_cluster
+- single_node_A2
+- single_node_A3
+- pd_cluster
 
 hardware_overrides:
   ascend_a3:
     extra_args:
-      - "--compilation-config"
-      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    - "--compilation-config"
+    - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
     extra_env:
-      # HCCL_BUFFSIZE 覆盖 base_env(1024)的 A3 取值;FlashComm1 环境变量已在
-      # features.flashcomm1 声明一次,这里不重复。
+      # HCCL_BUFFSIZE overrides base_env (1024) for A3; FlashComm1 env is
+      # declared once in `features.flashcomm1`, not duplicated here.
       HCCL_BUFFSIZE: "2560"
   ascend_a2:
     extra_args:
-      - "--compilation-config"
-      - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+    - "--compilation-config"
+    - '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
     extra_env:
       HCCL_BUFFSIZE: "1024"
 
 strategy_overrides: {}
 
 dependencies:
-  - note: "ModelScope 用于下载 W8A8 权重"
-    command: "pip install modelscope"
+- note: "ModelScope 用于下载 W8A8 权重"
+  command: "pip install modelscope"
 
-# 教程正文在 overview / prerequisites / env_setup / scenarios(上游忽略这些字段);
-# guide 仅作为上游兼容占位,保持与 en 一致。
 guide: ""
-
-# —— 可配置数值参数(页面/CI 扩展;默认值 = tutorial 基线)——
-# 布尔开关统一在 features(上游字段),页面同时渲染两者。
+# Tutorial content lives in overview / prerequisites / env_setup / scenarios
+# (upstream ignores those); guide kept as an upstream-compatible placeholder.
+# — Configurable VALUE params (page/CI extension; defaults = tutorial baseline).
+#   Boolean toggles live in `features` (upstream field) with label/args/env
+#   and our `default`/`flag_when_false` extensions; the page renders both. —
 config_params:
   max_model_len:
     default: 1048576
@@ -1219,8 +1220,8 @@ references:
 - title: ModelScope 模型下载
   url: https://www.modelscope.cn/models/Eco-Tech/DeepSeek-V4-Flash-w8a8-mtp
 - title: PD 分离指南（Mooncake）
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/features/pd_disaggregation_mooncake_multi_node.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/features/pd_disaggregation_mooncake_multi_node.html
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/DeepSeek-V4-Flash.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Flash.html
 - title: vllm-ascend GitHub
   url: https://github.com/vllm-project/vllm-ascend

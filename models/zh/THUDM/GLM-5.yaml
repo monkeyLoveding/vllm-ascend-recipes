@@ -7,9 +7,9 @@ meta:
   date_updated: 2026-07-13
   difficulty: advanced
   tasks:
-    - text
+  - text
   related_recipes:
-    - "zai-org/GLM-5.1"
+  - "zai-org/GLM-5.1"
   performance_headline: "Atlas 800 A3（128G × 8）多节点部署，支持 W4A8/W8A8 精度"
   hardware:
     atlas_800_a3: verified
@@ -18,17 +18,17 @@ meta:
 model:
   model_id: "zai-org/GLM-5"
   performance_model_names:
-    - "GLM-5"
-    - "GLM-5.1"
+  - "GLM-5"
+  - "GLM-5.1"
   min_vllm_version: "0.17.0rc1"
   architecture: moe
   parameter_count: "744B"
-  active_parameters: null
+  active_parameters:
   context_length: 131072
   modality: text
   base_args:
-    - "--trust-remote-code"
-    - "--enable-expert-parallel"
+  - "--trust-remote-code"
+  - "--enable-expert-parallel"
   base_env:
     HCCL_OP_EXPANSION_MODE: "AIV"
     HCCL_BUFFSIZE: "200"
@@ -41,13 +41,13 @@ model:
     atlas_800_a3: "quay.io/ascend/vllm-ascend:v0.22.1rc-a3"
   nightly_required: false
   install:
-    # Ascend 推荐 Docker 方式;pip 需源码编译,不提供官方 wheel,隐藏 pip 标签。
+    # Ascend recommends Docker; pip requires source build (no official wheel), so the pip tab is hidden.
     pip: false
     docker:
       command: "docker run --rm --net=host --shm-size=128g --device /dev/davinci0 --device /dev/davinci1 ... --device /dev/davinci15 -it quay.io/ascend/vllm-ascend:v0.22.1rc bash"
       note: "Ascend 官方镜像;完整设备/驱动挂载见 env_setup.container。"
 
-# —— 上游对齐:features / variants / strategies / overrides / guide ——
+# —— Upstream alignment: features / variants / strategies / overrides / guide ——
 features:
   expert_parallel:
     description: "跨 DP rank 的 MoE 专家并行(GLM-5 MoE 必需)"
@@ -100,21 +100,21 @@ variants:
     description: "BF16 权重 — 需要 2× Atlas 800 A3(各 16 芯片)"
 
 compatible_strategies:
-  - single_node_A3
-  - single_node_A2
-  - multi_node_dp
-  - pd_cluster
+- single_node_A3
+- single_node_A2
+- multi_node_dp
+- pd_cluster
 
 hardware_overrides: {}
 strategy_overrides: {}
 
 dependencies:
-  - note: "GLM-5 tokenizer 需要 transformers >= 5.2.0"
-    command: "pip install 'transformers>=5.2.0'"
+- note: "GLM-5 tokenizer 需要 transformers >= 5.2.0"
+  command: "pip install 'transformers>=5.2.0'"
 
 guide: ""
 
-# —— 可配置数值参数(页面/CI 扩展;默认值 = tutorial 基线)——
+# —— Configurable value params (page/CI extension; defaults = tutorial baseline) ——
 config_params:
   gpu_memory_utilization:
     default: 0.95
@@ -1064,7 +1064,7 @@ faq: |-
   A：使用 `dp1 tp16` 配置并禁用专家并行，以降低每 token 延迟。
 references:
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/GLM5.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.html
 - title: ModelScope 模型下载（GLM-5 BF16）
   url: https://www.modelscope.cn/models/ZhipuAI/GLM-5
 - title: ModelScope 模型下载（GLM-5 W4A8）

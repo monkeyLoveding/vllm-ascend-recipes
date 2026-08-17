@@ -8,7 +8,7 @@ meta:
   date_updated: 2026-07-07
   difficulty: intermediate
   related_recipes:
-    - "Qwen/Qwen3.6-27B"
+  - "Qwen/Qwen3.6-27B"
   hardware:
     atlas_800_a3: verified
     atlas_800_a2: verified
@@ -17,7 +17,7 @@ meta:
 model:
   model_id: "Qwen/Qwen3-30B-A3B"
   performance_model_names:
-    - "Qwen3-30B-A3B"
+  - "Qwen3-30B-A3B"
   min_vllm_version: "0.8.4rc2"
   architecture: moe
   parameter_count: "30.5B"
@@ -25,12 +25,12 @@ model:
   context_length: 40960
   modality: text
   base_args:
-    - "--trust-remote-code"
-    - "--enable-expert-parallel"
-    - "--quantization"
-    - "ascend"
-    - "--distributed_executor_backend"
-    - "mp"
+  - "--trust-remote-code"
+  - "--enable-expert-parallel"
+  - "--quantization"
+  - "ascend"
+  - "--distributed_executor_backend"
+  - "mp"
   base_env:
     HCCL_BUFFSIZE: "512"
     OMP_PROC_BIND: "false"
@@ -42,13 +42,13 @@ model:
     atlas_300i_duo: "quay.io/ascend/vllm-ascend:v0.23.0rc1-310p"
   nightly_required: false
   install:
-    # Ascend 推荐 Docker 方式;pip 需源码编译,不提供官方 wheel,隐藏 pip 标签。
+    # Ascend recommends Docker; pip requires source build (no official wheel), so the pip tab is hidden.
     pip: false
     docker:
       command: "docker run --rm --net=host --shm-size=128g -v /root/.cache/modelscope:/root/.cache/modelscope --device /dev/davinci0 --device /dev/davinci1 ... --device /dev/davinci7 -it quay.io/ascend/vllm-ascend:v0.23.0rc1 bash"
       note: "Ascend 官方镜像;完整设备/驱动挂载见 env_setup.container。"
 
-# —— 上游对齐:features / variants / strategies / overrides / guide ——
+# —— Upstream alignment: features / variants / strategies / overrides / guide ——
 features:
   expert_parallel:
     description: "跨 DP rank 的 MoE 专家并行(Qwen3-30B-A3B MoE 必需)"
@@ -76,7 +76,7 @@ features:
     args: ["--additional-config", '{"enable_flashcomm1": true, "weight_nz_mode": 2}']
 
 opt_in_features:
-  - prefix_caching
+- prefix_caching
 
 variants:
   default:
@@ -88,32 +88,32 @@ variants:
     precision: W8A8
     vram_minimum_gb: 37
     description: "W8A8 预量化权重"
-  bf16:
-    model_id: "Qwen/Qwen3-30B-A3B"
-    precision: bf16
-    vram_minimum_gb: 74
-    description: "BF16 权重,适用于 Atlas 800 A3"
   w8a8_310:
     model_id: "Eco-Tech/Qwen3-30B-A3B-w8a8-QuaRot-310"
     precision: W8A8
     vram_minimum_gb: 37
     description: "W8A8 QuaRot 权重,适用于 Atlas 300I DUO(TP2)"
+  bf16:
+    model_id: "Qwen/Qwen3-30B-A3B"
+    precision: bf16
+    vram_minimum_gb: 74
+    description: "BF16 权重,适用于 Atlas 800 A3"
 
 compatible_strategies:
-  - single_node_A3
-  - single_node_A2
-  - single_node_310p
+- single_node_A3
+- single_node_A2
+- single_node_310p
 
 hardware_overrides: {}
 strategy_overrides: {}
 
 dependencies:
-  - note: "Eagle3 投机解码草稿模型(替换 your_eagle3_model_path)"
-    command: "pip install modelscope && modelscope download --model AngelSlim/Qwen3-a3B_eagle3"
+- note: "Eagle3 投机解码草稿模型(替换 your_eagle3_model_path)"
+  command: "pip install modelscope && modelscope download --model AngelSlim/Qwen3-a3B_eagle3"
 
 guide: ""
 
-# —— 可配置数值参数(页面/CI 扩展;默认值 = tutorial 基线)——
+# —— Configurable value params (page/CI extension; defaults = tutorial baseline) ——
 config_params:
   max_model_len:
     default: 40960
@@ -151,7 +151,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Qwen/Qwen3-30B-A3B
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -176,7 +176,7 @@ weight_download:
   - source: HuggingFace
     url: ''
     command: ''
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: ''
   - source: GitCode
@@ -193,7 +193,7 @@ weight_download:
   - source: ModelScope
     url: ''
     command: ''
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: ''
   - source: GitCode
@@ -875,12 +875,12 @@ faq: |-
   关于常见的环境、安装和通用参数问题，请参考[公开 FAQ](https://docs.vllm.ai/projects/ascend/zh-cn/latest/faqs.html)。本章仅涵盖模型特定问题。
 references:
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/Qwen3-30B-A3B.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3-30B-A3B.html
 - title: ModelScope 模型下载（BF16）
   url: https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B
 - title: ModelScope 模型下载（W8A8）
   url: https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8
-- title: Eagle3 Draft Model
+- title: Eagle3草稿模型
   url: https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3
 - title: vllm-ascend GitHub
   url: https://github.com/vllm-project/vllm-ascend

@@ -12,13 +12,13 @@ meta:
 model:
   model_id: "ZhipuAI/GLM-4.7"
   performance_model_names:
-    - "GLM-4.5"
-    - "GLM-4.6"
-    - "GLM-4.7"
+  - "GLM-4.5"
+  - "GLM-4.6"
+  - "GLM-4.7"
   min_vllm_version: "0.10.0rc1"
   architecture: moe
   parameter_count: "31B"
-  active_parameters: null
+  active_parameters:
   context_length: 133000
   modality: text
 
@@ -529,7 +529,7 @@ faq: |-
   ```
 references:
 - title: vllm-ascend 文档
-  url: https://docs.vllm.ai/projects/ascend/zh-cn/latest/tutorials/models/GLM4.x.html
+  url: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM4.x.html
 - title: ModelScope 模型下载（GLM-4.5 BF16）
   url: https://www.modelscope.cn/models/ZhipuAI/GLM-4.5
 - title: ModelScope 模型下载（GLM-4.6 BF16）

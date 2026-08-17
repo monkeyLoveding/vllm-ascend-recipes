@@ -1,5 +1,5 @@
 meta:
-  title: "DeepSeek-V2-Lite W8A8 — 多节点 PD 分离(demo)"
+  title: "DeepSeek-V2-Lite W8A8 — Multi-Node PD Separation (demo)"
   slug: "deepseek-v2-lite-w8a8"
   provider: "DeepSeek"
   description: "DeepSeek-V2-Lite MoE(总参 16B / 激活 2.4B)以多节点 PD 分离拓扑(1P1D)部署,W8A8 量化 + Mooncake KV 传输。"
@@ -7,9 +7,9 @@ meta:
   date_updated: "2026-08-07"
   difficulty: advanced
   tasks:
-    - text
+  - text
   related_recipes:
-    - "deepseek-ai/DeepSeek-V4-Flash"
+  - "deepseek-ai/DeepSeek-V4-Flash"
   hardware:
     atlas_800_a2: verified
 
@@ -22,10 +22,10 @@ model:
   context_length: 32768
   modality: text
   base_args:
-    - "--trust-remote-code"
-    - "--enable-expert-parallel"
-    - "--quantization"
-    - "ascend"
+  - "--trust-remote-code"
+  - "--enable-expert-parallel"
+  - "--quantization"
+  - "ascend"
   base_env:
     HCCL_BUFFSIZE: "256"
     OMP_PROC_BIND: "false"
@@ -36,13 +36,13 @@ model:
     atlas_800_a2: "quay.io/ascend/vllm-ascend:v0.23.0rc1"
   nightly_required: false
   install:
-    # Ascend 推荐 Docker 方式;pip 需源码编译,不提供官方 wheel,隐藏 pip 标签。
+    # Ascend recommends Docker; pip requires source build (no official wheel), so the pip tab is hidden.
     pip: false
     docker:
       command: "docker run --rm --net=host --shm-size=128g -v /root/.cache/modelscope:/root/.cache/modelscope --device /dev/davinci0 --device /dev/davinci1 ... --device /dev/davinci7 -it quay.io/ascend/vllm-ascend:v0.23.0rc1 bash"
       note: "Ascend 官方镜像;完整设备/驱动挂载见 env_setup.container。"
 
-# —— 上游对齐:features / variants / strategies / overrides / guide ——
+# —— Upstream alignment: features / variants / strategies / overrides / guide ——
 features:
   expert_parallel:
     description: "跨 DP rank 的 MoE 专家并行"
@@ -62,18 +62,18 @@ variants:
     description: "W8A8 预量化权重,适用于 Atlas 800 A2"
 
 compatible_strategies:
-  - pd_cluster
+- pd_cluster
 
 hardware_overrides: {}
 strategy_overrides: {}
 
 dependencies:
-  - note: "ModelScope 用于下载 W8A8 权重"
-    command: "pip install modelscope"
+- note: "ModelScope 用于下载 W8A8 权重"
+  command: "pip install modelscope"
 
 guide: ""
 
-# —— 可配置数值参数(页面/CI 扩展;默认值 = tutorial 基线)——
+# —— Configurable value params (page/CI extension; defaults = tutorial baseline) ——
 config_params:
   max_model_len:
     default: 4096

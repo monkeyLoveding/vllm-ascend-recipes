@@ -5,12 +5,12 @@ meta:
   description: "Qwen3.5-27B 与 Qwen3.6-27B 是 Qwen3.5/Qwen3.6 系列的稠密混合 Mamba-Transformer 语言模型，在架构效率、强化学习规模和全球可访问性方面均有突破。两者共享相同的混合注意力设计（GDN + 全注意力）和 MTP 头设计，在昇腾 NPU 上的部署方式一致，适用于对话、内容创作、代码生成等通用文本生成任务。"
   date_added: 2026-07-27
   tasks:
-    - text
+  - text
   performance_headline: "Atlas 800 A2/A3 单节点部署，采用 TP=2 + DP=8 的 DP-first 并行策略"
   date_updated: 2026-07-27
   difficulty: advanced
   related_recipes:
-    - "Qwen/Qwen3-30B-A3B"
+  - "Qwen/Qwen3-30B-A3B"
   hardware:
     atlas_800_a3: verified
     atlas_800_a2: verified
@@ -21,11 +21,11 @@ model:
   min_vllm_version: "0.18.0rc1"
   architecture: dense
   parameter_count: "27B"
-  active_parameters: null
+  active_parameters:
   context_length: 262144
   modality: text
   base_args:
-    - "--trust-remote-code"
+  - "--trust-remote-code"
   base_env:
     VLLM_USE_MODELSCOPE: "True"
     PYTORCH_NPU_ALLOC_CONF: "expandable_segments:True"
@@ -39,13 +39,13 @@ model:
     atlas_300i_duo: "quay.io/ascend/vllm-ascend:v0.23.0rc1-310p"
   nightly_required: false
   install:
-    # Ascend 推荐 Docker 方式;pip 需源码编译,不提供官方 wheel,隐藏 pip 标签。
+    # Ascend recommends Docker; pip requires source build (no official wheel), so the pip tab is hidden.
     pip: false
     docker:
       command: "docker run --rm --net=host --shm-size=512g -v /root/.cache/modelscope:/root/.cache/modelscope --device /dev/davinci0 --device /dev/davinci1 ... --device /dev/davinci7 -it quay.io/ascend/vllm-ascend:v0.18.0rc1 bash"
       note: "Ascend 官方镜像;完整设备/驱动挂载见 env_setup.container。"
 
-# —— 上游对齐:features / variants / strategies / overrides / guide ——
+# —— Upstream alignment: features / variants / strategies / overrides / guide ——
 features:
   spec_decoding:
     label: "MTP Spec Decoding"
@@ -75,7 +75,7 @@ features:
       VLLM_ASCEND_ENABLE_FLASHCOMM1: "1"
 
 opt_in_features:
-  - prefix_caching
+- prefix_caching
 
 variants:
   default:
@@ -94,10 +94,10 @@ variants:
     description: "BF16 权重,适用于 Atlas 800 A3"
 
 compatible_strategies:
-  - single_node_A2
-  - single_node_A3
-  - single_node_310p
-  - pd_cluster
+- single_node_A2
+- single_node_A3
+- single_node_310p
+- pd_cluster
 
 hardware_overrides: {}
 strategy_overrides: {}
@@ -106,7 +106,7 @@ dependencies: []
 
 guide: ""
 
-# —— 可配置数值参数(页面/CI 扩展;默认值 = tutorial 基线)——
+# —— Configurable value params (page/CI extension; defaults = tutorial baseline) ——
 config_params:
   max_model_len:
     default: 133000
@@ -164,7 +164,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Qwen/Qwen3.5-27B
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -178,7 +178,7 @@ weight_download:
       git clone https://gitcode.com/Qwen/Qwen3.5-27B.git
       ```
 
-# ---- Qwen3.5-27B W8A8（带 MTP） ----
+# ---- Qwen3.5-27B W8A8 (with MTP) ----
 - weight_version: Qwen3.5-27B-w8a8-mtp
   sources:
   - source: ModelScope
@@ -195,7 +195,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Eco-Tech/Qwen3.5-27B-w8a8-mtp
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -226,7 +226,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Qwen/Qwen3.6-27B
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -257,7 +257,7 @@ weight_download:
       pip install -U huggingface_hub
       huggingface-cli download Eco-Tech/Qwen3.6-27B-w8a8
       ```
-  - source: 魔乐社区
+  - source: Modelers
     url: ''
     command: |-
       ```bash
@@ -372,7 +372,7 @@ env_setup:
         ```
 
 scenarios:
-# ===== Atlas 800 A2 单节点 W8A8 =====
+# ===== Atlas 800 A2 single-node W8A8 =====
 - npu: Atlas 800I A2
   precision: W8A8
   deployment: 单节点
@@ -418,7 +418,7 @@ scenarios:
     content: |-
       参见下方“功能验证”部分 —— 日志打印 `Application startup complete.` 即服务就绪。
 
-# ===== Atlas 800 A3 单节点 W8A8 =====
+# ===== Atlas 800 A3 single-node W8A8 =====
 - npu: Atlas 800I A3
   precision: W8A8
   deployment: 单节点
@@ -462,7 +462,7 @@ scenarios:
     content: |-
       参见下方“功能验证”部分。
 
-# ===== Atlas 800 A3 单节点 BF16 =====
+# ===== Atlas 800 A3 single-node BF16 =====
 - npu: Atlas 800I A3
   precision: BF16
   deployment: 单节点
@@ -495,7 +495,7 @@ scenarios:
     content: |-
       参见下方“功能验证”部分。
 
-# ===== Atlas 800 A3 多节点 PD 分离 =====
+# ===== Atlas 800 A3 multi-node PD separation =====
 - npu: Atlas 800I A3
   precision: W8A8
   deployment: 多节点 PD 分离
