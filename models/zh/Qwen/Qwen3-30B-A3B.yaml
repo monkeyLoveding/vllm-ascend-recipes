@@ -880,7 +880,7 @@ references:
   url: https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B
 - title: ModelScope 模型下载（W8A8）
   url: https://www.modelscope.cn/models/Eco-Tech/Qwen3-30B-A3B-w8a8
-- title: Eagle3 Draft Model
+- title: Eagle3草稿模型
   url: https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3
 - title: vllm-ascend GitHub
   url: https://github.com/vllm-project/vllm-ascend
