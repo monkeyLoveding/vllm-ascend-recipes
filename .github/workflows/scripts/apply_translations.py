@@ -67,7 +67,7 @@ def process_file(en_path: Path, translated: dict[str, str], patterns, write_zh: 
         # trusted as-is. On failure, fall back to English so we never ship a
         # recipe with broken placeholders / dropped code blocks.
         if source == "translated" and zh != en:
-            ok, missing = tc.check_integrity(en, zh)
+            ok, missing = tc.check_integrity(en, zh, path_str)
             if not ok:
                 print(f"  WARN integrity: {en_path.name} {path_str} — {missing[:3]}")
                 zh = en

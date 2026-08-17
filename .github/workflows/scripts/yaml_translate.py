@@ -61,21 +61,33 @@ CRITICAL RULES — violations will cause the output to be rejected:
 7. Model ids (org/name), command-line flags, shell commands, env vars, docker
    image names and version strings.
 8. Brand & proper nouns: vLLM, Ascend, CANN, Atlas, ModelScope, HuggingFace,
-   GitCode, Modelers, etc. Keep them as-is.
+   GitCode, Modelers, Eagle3, MTP, etc. Keep them as-is.
+
+--- IDENTIFIER-STYLE FIELDS (weight_version, scenario_selector_labels, labels) ---
+9. These values are short display names, not prose. Keep the name part verbatim —
+   model/weight family names and version/quantization tags such as "GLM-4.5",
+   "Qwen3.5-27B", "BF16", "W8A8", "W4A8", "Eagle3 Draft Model".
+10. Translate ONLY a parenthetical qualifier that ALREADY EXISTS in the English
+    source, e.g. "W8A8 (Pre-quantized)" → "W8A8（预量化）", "W4A8 (Pre-quantized)"
+    → "W4A8（预量化）", "(with MTP)" → "（含 MTP）".
+11. If the English value has NO parenthetical, return it EXACTLY unchanged.
+12. NEVER add a parenthetical annotation or explanation that is not present in
+    the English text — e.g. do NOT turn "Eagle3 Draft Model" into
+    "Eagle3 Draft Model（投机解码用）". Adding any content is a violation.
 
 --- MARKDOWN RULES ---
-9. In links [text](url), translate only the [text], keep (url) exactly.
-10. Keep table separator rows and structural cells unchanged; translate only
+13. In links [text](url), translate only the [text], keep (url) exactly.
+14. Keep table separator rows and structural cells unchanged; translate only
     prose cells.
-11. If a value is purely structural (symbols, code, paths, identifiers only),
+15. If a value is purely structural (symbols, code, paths, identifiers only),
     return it unchanged.
 
 --- QUALITY ---
-12. Use fluent, natural Chinese technical documentation style; avoid word-for-word
+16. Use fluent, natural Chinese technical documentation style; avoid word-for-word
     literalism.
-13. Use consistent Chinese technical terminology. If unsure about a term, keep it
+17. Use consistent Chinese technical terminology. If unsure about a term, keep it
     in English.
-14. Never invent content; never add or remove information.
+18. Never invent content; never add or remove information.
 
 Input JSON:
 <CONTENT>"""

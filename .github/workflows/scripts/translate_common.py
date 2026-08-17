@@ -208,6 +208,17 @@ def set_path(root, path_tuple: tuple, value: str) -> None:
 _PLACEHOLDER_RE = re.compile(r"\{\{[^{}]*\}\}")
 _CONFIG_RE = re.compile(r"%%[A-Za-z0-9_:\-/]+%%")
 
+# Identifier-style fields hold short display names (weight versions, selector
+# labels) where a parenthetical gloss is never invented during translation.
+_IDENTIFIER_FIELD_RE = re.compile(
+    r"^(?:weight_download\[\d+\]\.weight_version|scenario_selector_labels\.[^.]+)$"
+)
+
+
+def _has_gloss(text: str) -> bool:
+    """True if *text* contains a matched (...) or （...） pair."""
+    return ("(" in text and ")" in text) or ("（" in text and "）" in text)
+
 
 def protected_tokens(text: str) -> list[str]:
     """Return machine-consumed tokens that must survive translation verbatim."""
@@ -217,11 +228,15 @@ def protected_tokens(text: str) -> list[str]:
     return tokens
 
 
-def check_integrity(en: str, zh: str) -> tuple[bool, list[str]]:
+def check_integrity(en: str, zh: str, path_str: str = "") -> tuple[bool, list[str]]:
     """Return (ok, missing): placeholders/markers absent from zh, or fence imbalance."""
     missing = [t for t in protected_tokens(en) if t not in zh]
     if en.count("```") != zh.count("```"):
         missing.append("<fence-count-mismatch>")
+    # Identifier-style fields: reject an invented parenthetical gloss that was
+    # not in the English source (e.g. "Eagle3 Draft Model" → "…（投机解码用）").
+    if _IDENTIFIER_FIELD_RE.match(path_str) and not _has_gloss(en) and _has_gloss(zh):
+        missing.append("<added-parenthetical-gloss>")
     return (not missing, missing)
 
 
