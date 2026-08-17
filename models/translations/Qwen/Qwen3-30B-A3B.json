@@ -81,7 +81,7 @@
   },
   "weight_download[2].weight_version": {
     "en": "Eagle3 Draft Model",
-    "zh": "Eagle3 Draft Model"
+    "zh": "Eagle3 Draft Model（投机解码用）"
   },
   "quantization.content": {
     "en": "Qwen3-30B-A3B-W8A8 adopts a hybrid quantization strategy (ordered by model structure):\n\n- **Embedding layer**: BF16 (no quantization)\n- **Q/K normalization** (q_norm, k_norm): BF16\n- **Attention projections** (q/k/v/o_proj): Static W8A8 with pre-computed per-tensor scales\n- **MoE routing gate** (mlp.gate): BF16\n- **MoE expert projections** (gate/up/down_proj): Dynamic W8A8 where input scales are computed on-the-fly during inference\n\nIf the W8A8 quantized weights are not available for direct download, you can obtain them by quantizing the BF16 model using **msmodelslim**. Refer to the [Quantization Guide](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/quantization.html) for details. All model paths in this document should be adjusted to your actual local paths.",

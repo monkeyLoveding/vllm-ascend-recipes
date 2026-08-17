@@ -182,7 +182,7 @@ weight_download:
   - source: GitCode
     url: ''
     command: ''
-- weight_version: Eagle3 Draft Model
+- weight_version: Eagle3 Draft Model（投机解码用）
   sources:
   - source: HuggingFace
     url: https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3
