@@ -118,8 +118,13 @@ jobs:
         id: stage
         run: |
           git add models/zh models/translations
-          git diff --cached --quiet && echo "Nothing to commit" && exit 1
+          if git diff --cached --quiet; then
+            echo "无文件需要翻译"
+            echo "has_staged=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
+          echo "has_staged=true" >> $GITHUB_OUTPUT
           count=$(git diff --cached --name-only | wc -l)
           file_list=$(git diff --cached --name-only | sed 's/^/- <code>/; s/$/<\/code>/')
           echo "count=$count" >> $GITHUB_OUTPUT
@@ -130,7 +135,7 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Commit and push
-        if: steps.detect.outputs.has_changes == 'True'
+        if: steps.detect.outputs.has_changes == 'True' && steps.stage.outputs.has_staged == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -138,7 +143,7 @@ jobs:
           git push -f -u origin "${{ env.BRANCH_NAME }}"
 
       - name: Create PR
-        if: steps.detect.outputs.has_changes == 'True'
+        if: steps.detect.outputs.has_changes == 'True' && steps.stage.outputs.has_staged == 'true'
         uses: actions/github-script@v9
         env:
           FILE_LIST: ${{ steps.stage.outputs.file_list }}
