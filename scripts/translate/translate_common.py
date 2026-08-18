@@ -29,7 +29,7 @@ from ruamel.yaml.scalarstring import LiteralScalarString
 # --- Paths -----------------------------------------------------------------
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent.parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
 EN_DIR = REPO_ROOT / "models" / "en"
 ZH_DIR = REPO_ROOT / "models" / "zh"
 MEM_DIR = REPO_ROOT / "models" / "translations"
