@@ -94,6 +94,10 @@ overview: |-
   This is the lightest PD topology covered by the multi-node recipe verify
   pipeline, and it is the CI end-to-end check for `scripts/multinode/`.
 
+  For teams evaluating the multi-node PD path end to end, this recipe serves as
+  a minimal reference that exercises the full download, launch, and verification
+  flow across two nodes without extra setup.
+
 weight_download:
 - weight_version: W8A8 (Pre-quantized)
   sources:
