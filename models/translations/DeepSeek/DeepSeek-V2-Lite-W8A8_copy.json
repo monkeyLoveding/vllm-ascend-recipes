@@ -32,8 +32,8 @@
     "zh": "最大并发序列数"
   },
   "overview": {
-    "en": "DeepSeek-V2-Lite is the 16B-total / 2.4B-active MoE sibling of DeepSeek-V2.\nThis recipe runs it in a **multi-node PD separation** topology — one Prefill\nnode and one Decode node (1P1D), each using 2 Atlas 800I A2 cards\n(`TP=1 + DP=2`), with W8A8 quantized weights and Mooncake-based KV transfer\nbetween the two nodes.\n\nThis is the lightest PD topology covered by the multi-node recipe verify\npipeline, and it is the CI end-to-end check for `scripts/multinode/`.",
-    "zh": "DeepSeek-V2-Lite是DeepSeek-V2的MoE姊妹模型，总参数量16B / 激活参数量2.4B。\n本配方以**多节点PD分离**拓扑运行——一个Prefill节点和一个Decode节点（1P1D），每个节点使用2张Atlas 800I A2卡（`TP=1 + DP=2`），采用W8A8量化权重，并通过基于Mooncake的KV传输连接两个节点。\n\n这是多节点配方验证流水线所覆盖的最轻量PD拓扑，也是`scripts/multinode/`的CI端到端检查。"
+    "en": "DeepSeek-V2-Lite is the 16B-total / 2.4B-active MoE sibling of DeepSeek-V2.\nThis recipe runs it in a **multi-node PD separation** topology — one Prefill\nnode and one Decode node (1P1D), each using 2 Atlas 800I A2 cards\n(`TP=1 + DP=2`), with W8A8 quantized weights and Mooncake-based KV transfer\nbetween the two nodes.\n\nThis is the lightest PD topology covered by the multi-node recipe verify\npipeline, and it is the CI end-to-end check for `scripts/multinode/`.\n\nFor teams evaluating the multi-node PD path end to end, this recipe serves as\na minimal reference that exercises the full download, launch, and verification\nflow across two nodes without extra setup.",
+    "zh": "DeepSeek-V2-Lite 是 DeepSeek-V2 的 16B 总参数量 / 2.4B 激活参数的 MoE 兄弟模型。\n本配方以**多节点 PD 分离**拓扑运行它——一个 Prefill 节点和一个 Decode 节点（1P1D），每个节点使用 2 张 Atlas 800I A2 卡（`TP=1 + DP=2`），采用 W8A8 量化权重，并在两个节点之间使用基于 Mooncake 的 KV 传输。\n\n这是多节点配方验证流水线所覆盖的最轻量 PD 拓扑，也是 `scripts/multinode/` 的 CI 端到端检查。\n\n对于端到端评估多节点 PD 路径的团队，本配方作为一个最小参考，无需额外设置即可跨两个节点执行完整的下载、启动和验证流程。"
   },
   "weight_download[0].weight_version": {
     "en": "W8A8 (Pre-quantized)",
